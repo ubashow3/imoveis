@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Property, ViewState, PropertyType, SiteSettings, ThemeOption } from './types';
 import { generatePropertyDescription } from './services/geminiService';
+import { supabase } from './services/supabaseClient'; // Import Supabase Client
 import { PropertyCard } from './components/PropertyCard';
 import { 
   LayoutDashboard, 
@@ -37,7 +38,8 @@ import {
   Camera,
   ChevronLeft,
   ChevronRight,
-  UserCircle
+  UserCircle,
+  Database
 } from 'lucide-react';
 
 // --- UTILS ---
@@ -58,6 +60,74 @@ const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// --- SAMPLE DATA FOR SEEDING ---
+const SAMPLE_PROPERTIES = [
+  {
+    title: "Casa de Alto Padrão em Itamambuca",
+    description: "Espetacular casa pé na areia com piscina e área gourmet completa. Ideal para famílias grandes que buscam conforto e privacidade em meio à natureza.",
+    location: "Itamambuca, Ubatuba",
+    price: 3500,
+    type: "rent_seasonal",
+    bedrooms: 5,
+    bathrooms: 6,
+    area: 450,
+    features: ["Piscina", "Churrasqueira", "Ar Condicionado", "Wi-Fi", "Jardim", "Vista para Montanha"],
+    images: [
+      "https://images.unsplash.com/photo-1600596542815-60c37c6525fa?q=80&w=1000&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=1000&auto=format&fit=crop"
+    ],
+    views: 120
+  },
+  {
+    title: "Apartamento Vista Mar Praia Grande",
+    description: "Apartamento moderno e recém reformado no melhor ponto da Praia Grande. Varanda gourmet envidraçada com vista total para o mar.",
+    location: "Praia Grande, Ubatuba",
+    price: 850000,
+    type: "sale",
+    bedrooms: 3,
+    bathrooms: 2,
+    area: 110,
+    features: ["Vista Mar", "Varanda Gourmet", "Mobiliado", "Elevador", "Portaria 24h"],
+    images: [
+      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=1000&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1000&auto=format&fit=crop"
+    ],
+    views: 450
+  },
+  {
+    title: "Chalé Aconchegante no Prumirim",
+    description: "Refúgio romântico cercado pela mata atlântica. Acesso fácil à cachoeira e praia. Perfeito para casais.",
+    location: "Prumirim, Ubatuba",
+    price: 600,
+    type: "rent_seasonal",
+    bedrooms: 1,
+    bathrooms: 1,
+    area: 60,
+    features: ["Lareira", "Deck de Madeira", "Cozinha Equipada", "Pet Friendly"],
+    images: [
+      "https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=1000&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1587061949409-02df41d5e562?q=80&w=1000&auto=format&fit=crop"
+    ],
+    views: 89
+  },
+  {
+    title: "Cobertura Duplex no Tenório",
+    description: "Cobertura exclusiva com jacuzzi privativa no terraço. Vista panorâmica da baía do Tenório e Praia Vermelha.",
+    location: "Tenório, Ubatuba",
+    price: 1200000,
+    type: "sale",
+    bedrooms: 4,
+    bathrooms: 4,
+    area: 220,
+    features: ["Jacuzzi", "Vista Panorâmica", "Duas Vagas", "Condomínio Clube"],
+    images: [
+      "https://images.unsplash.com/photo-1512915922686-57c11dde9b6b?q=80&w=1000&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1574362848149-11496d93a7c7?q=80&w=1000&auto=format&fit=crop"
+    ],
+    views: 310
+  }
+];
+
 // --- CUSTOM LOGO COMPONENT ---
 const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -77,97 +147,6 @@ const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
     <path d="M20 115 Q 50 105, 80 115 T 140 115 T 180 105" stroke="currentColor" strokeWidth="4" fill="none" className="text-ocean-400"/>
   </svg>
 );
-
-// --- MOCK DATA ---
-const INITIAL_PROPERTIES: Property[] = [
-  {
-    id: '1',
-    title: 'Cobertura Praia Grande',
-    description: 'Espetacular cobertura com vista total para o mar na Praia Grande. Prédio novo com piscina na sacada, churrasqueira e ar condicionado em todos os ambientes. Próximo aos melhores quiosques.',
-    location: 'Praia Grande, Ubatuba',
-    price: 1800000,
-    type: 'sale',
-    bedrooms: 3,
-    bathrooms: 4,
-    area: 140,
-    images: [
-        'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1613553507747-5f8d62ad5904?auto=format&fit=crop&q=80&w=800'
-    ],
-    features: ['Vista Mar', 'Piscina Privativa', 'Churrasqueira', 'Ar Condicionado'],
-    views: 1240
-  },
-  {
-    id: '2',
-    title: 'Casa em Itamambuca',
-    description: 'Casa rústica e aconchegante dentro do condomínio de Itamambuca. Cercada pela mata atlântica, a poucos metros da praia. Ideal para surfistas e amantes da natureza.',
-    location: 'Itamambuca, Ubatuba',
-    price: 1800,
-    type: 'rent_seasonal',
-    bedrooms: 4,
-    bathrooms: 3,
-    area: 220,
-    images: [
-        'https://images.unsplash.com/photo-1499793983690-e29da59ef1c2?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1595867858492-5d149242062e?auto=format&fit=crop&q=80&w=800'
-    ],
-    features: ['Próximo ao Mar', 'Jardim Amplo', 'Wi-Fi Fibra', 'Redário'],
-    views: 850
-  },
-  {
-    id: '3',
-    title: 'Apto Varanda Gourmet Tenório',
-    description: 'Apartamento amplo com varanda gourmet envidraçada. Condomínio com lazer completo (piscina, sauna, salão de jogos). Excelente localização no Tenório.',
-    location: 'Tenório, Ubatuba',
-    price: 850000,
-    type: 'sale',
-    bedrooms: 2,
-    bathrooms: 2,
-    area: 85,
-    images: [
-        'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1613490493576-7fde63acd811?auto=format&fit=crop&q=80&w=800'
-    ],
-    features: ['Varanda Gourmet', 'Piscina no Condomínio', 'Portaria 24h'],
-    views: 620
-  },
-  {
-    id: '4',
-    title: 'Refúgio no Prumirim',
-    description: 'Casa de alto padrão com arquitetura moderna e vista para a Ilha do Prumirim. Privacidade total e acesso exclusivo à praia.',
-    location: 'Prumirim, Ubatuba',
-    price: 3500,
-    type: 'rent_seasonal',
-    bedrooms: 5,
-    bathrooms: 6,
-    area: 450,
-    images: [
-        'https://images.unsplash.com/photo-1600596542815-2250657d2f11?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1512915922686-57c11dde9b6b?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&q=80&w=800',
-        'https://images.unsplash.com/photo-1600607687644-c7171b42498b?auto=format&fit=crop&q=80&w=800'
-    ],
-    features: ['Vista Panorâmica', 'Piscina Infinita', 'Design Moderno'],
-    views: 2100
-  },
-   {
-    id: '5',
-    title: 'Flat Centro de Ubatuba',
-    description: 'Praticidade e conforto no centro da cidade. Próximo a restaurantes, lojas e ao calçadão. Ótimo investimento para locação Airbnb.',
-    location: 'Centro, Ubatuba',
-    price: 450000,
-    type: 'sale',
-    bedrooms: 1,
-    bathrooms: 1,
-    area: 40,
-    images: [
-        'https://images.unsplash.com/photo-1502000206303-7e02c072cbf9?auto=format&fit=crop&q=80&w=800'
-    ],
-    features: ['Mobiliado', 'Elevador', 'Zeladoria'],
-    views: 430
-  }
-];
 
 const INITIAL_SETTINGS: SiteSettings = {
   siteName: 'Aluga-se Ubatuba',
@@ -308,7 +287,7 @@ const PropertyDetails: React.FC<{
 
           <div className="prose max-w-none text-muted mb-8">
             <h3 className="text-lg font-bold text-main mb-2">Sobre o Imóvel</h3>
-            <p>{property.description}</p>
+            <p className="whitespace-pre-line">{property.description}</p>
           </div>
 
           <div className="mb-8">
@@ -387,10 +366,11 @@ const PropertyDetails: React.FC<{
 
 const AdminForm: React.FC<{
   property: Partial<Property>;
-  onSave: (p: Property) => void;
+  onSave: (p: Partial<Property>) => void;
   onCancel: () => void;
   onChange: (p: Partial<Property>) => void;
-}> = ({ property, onSave, onCancel, onChange }) => {
+  isLoading: boolean;
+}> = ({ property, onSave, onCancel, onChange, isLoading }) => {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [tempFeature, setTempFeature] = useState('');
 
@@ -570,6 +550,7 @@ const AdminForm: React.FC<{
        <div className="mt-8 flex justify-end gap-4">
           <button onClick={onCancel} className="px-6 py-2 border rounded-lg hover:bg-gray-50 text-main">Cancelar</button>
           <button 
+            disabled={isLoading}
             onClick={() => {
                 if (!property.title || !property.price) {
                   alert("Título e Preço são obrigatórios");
@@ -577,15 +558,14 @@ const AdminForm: React.FC<{
                 }
                 onSave({
                   ...property,
-                  id: property.id || Date.now().toString(),
                   images: property.images || [],
                   features: property.features || [],
                   views: property.views || 0
-                } as Property);
+                });
             }} 
-            className="px-6 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-700"
+            className="px-6 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-700 disabled:opacity-50"
           >
-            Salvar Imóvel
+            {isLoading ? 'Salvando...' : 'Salvar Imóvel'}
           </button>
        </div>
     </div>
@@ -735,58 +715,73 @@ const AdminProperties: React.FC<{
   onEdit: (p: Property) => void;
   onDelete: (id: string) => void;
   onNew: () => void;
-}> = ({ properties, onEdit, onDelete, onNew }) => {
+  onSeed: () => void; // New prop for seeding
+  isLoading: boolean;
+}> = ({ properties, onEdit, onDelete, onNew, onSeed, isLoading }) => {
   return (
     <div className="bg-card rounded-xl shadow-sm border border-ocean-100 p-6">
        <div className="flex justify-between items-center mb-6">
          <h2 className="text-xl font-bold text-main">Imóveis Cadastrados ({properties.length})</h2>
-         <button 
-           onClick={onNew}
-           className="bg-ocean-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-ocean-700"
-         >
-           <Plus size={18} /> Novo
-         </button>
+         <div className="flex gap-2">
+             <button 
+                onClick={onSeed}
+                className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-purple-200"
+                title="Preencher com imóveis de teste"
+             >
+                <Database size={18} /> <span className="hidden md:inline">Gerar Teste</span>
+             </button>
+             <button 
+               onClick={onNew}
+               className="bg-ocean-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-ocean-700"
+             >
+               <Plus size={18} /> Novo
+             </button>
+         </div>
        </div>
 
-       <div className="overflow-x-auto">
-         <table className="w-full text-left">
-           <thead>
-             <tr className="border-b border-ocean-100 bg-ocean-50">
-               <th className="p-4 text-ocean-900">Imóvel</th>
-               <th className="p-4 text-ocean-900">Tipo</th>
-               <th className="p-4 text-ocean-900">Preço</th>
-               <th className="p-4 text-right text-ocean-900">Ações</th>
-             </tr>
-           </thead>
-           <tbody>
-             {properties.map(prop => (
-               <tr key={prop.id} className="border-b border-ocean-100 hover:bg-ocean-50/50">
-                 <td className="p-4 font-medium text-main">{prop.title}</td>
-                 <td className="p-4">
-                   <span className={`px-2 py-1 rounded text-xs ${prop.type === 'sale' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                     {prop.type === 'sale' ? 'Venda' : 'Temporada'}
-                   </span>
-                 </td>
-                 <td className="p-4 text-muted">R$ {prop.price.toLocaleString()}</td>
-                 <td className="p-4 text-right">
-                    <button 
-                      onClick={() => onEdit(prop)}
-                      className="text-blue-600 hover:text-blue-800 mx-2"
-                    >
-                      <Edit size={18} />
-                    </button>
-                    <button 
-                      onClick={() => onDelete(prop.id)}
-                      className="text-red-600 hover:text-red-800 mx-2"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                 </td>
-               </tr>
-             ))}
-           </tbody>
-         </table>
-       </div>
+       {isLoading ? (
+          <div className="text-center py-10 text-muted">Carregando imóveis...</div>
+       ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-ocean-100 bg-ocean-50">
+                  <th className="p-4 text-ocean-900">Imóvel</th>
+                  <th className="p-4 text-ocean-900">Tipo</th>
+                  <th className="p-4 text-ocean-900">Preço</th>
+                  <th className="p-4 text-right text-ocean-900">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {properties.map(prop => (
+                  <tr key={prop.id} className="border-b border-ocean-100 hover:bg-ocean-50/50">
+                    <td className="p-4 font-medium text-main">{prop.title}</td>
+                    <td className="p-4">
+                      <span className={`px-2 py-1 rounded text-xs ${prop.type === 'sale' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
+                        {prop.type === 'sale' ? 'Venda' : 'Temporada'}
+                      </span>
+                    </td>
+                    <td className="p-4 text-muted">R$ {prop.price.toLocaleString()}</td>
+                    <td className="p-4 text-right">
+                        <button 
+                          onClick={() => onEdit(prop)}
+                          className="text-blue-600 hover:text-blue-800 mx-2"
+                        >
+                          <Edit size={18} />
+                        </button>
+                        <button 
+                          onClick={() => onDelete(prop.id)}
+                          className="text-red-600 hover:text-red-800 mx-2"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+       )}
     </div>
   );
 };
@@ -794,7 +789,8 @@ const AdminProperties: React.FC<{
 // --- MAIN APP ---
 
 const App: React.FC = () => {
-  const [properties, setProperties] = useState<Property[]>(INITIAL_PROPERTIES);
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SETTINGS);
   const [view, setView] = useState<ViewState>(ViewState.HOME);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
@@ -806,8 +802,37 @@ const App: React.FC = () => {
 
   // Apply theme on init
   useEffect(() => {
+    // Load settings from local storage if available
+    const savedSettings = localStorage.getItem('siteSettings');
+    if (savedSettings) {
+      setSettings(JSON.parse(savedSettings));
+    }
+  }, []);
+
+  useEffect(() => {
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
-  }, [settings.primaryColor]);
+    localStorage.setItem('siteSettings', JSON.stringify(settings));
+  }, [settings]);
+
+  // FETCH PROPERTIES FROM SUPABASE
+  const fetchProperties = async () => {
+    setIsLoading(true);
+    const { data, error } = await supabase
+      .from('properties')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Error fetching properties:', error.message);
+    } else if (data) {
+      setProperties(data as Property[]);
+    }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    fetchProperties();
+  }, []);
 
   const handlePropertyClick = (property: Property) => {
     setSelectedProperty(property);
@@ -815,19 +840,60 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
-  const handleSaveProperty = (propertyToSave: Property) => {
-    if (editingProperty.id) {
-      setProperties(prev => prev.map(p => p.id === propertyToSave.id ? propertyToSave : p));
-    } else {
-      setProperties(prev => [...prev, propertyToSave]);
+  const handleSaveProperty = async (propertyToSave: Partial<Property>) => {
+    setIsLoading(true);
+    
+    // If it's a new property (no ID), remove the ID field so Supabase generates a UUID
+    const payload = { ...propertyToSave };
+    if (!payload.id) {
+        delete payload.id;
     }
-    setView(ViewState.ADMIN_PROPERTIES);
-    setEditingProperty({});
+
+    const { error } = await supabase
+        .from('properties')
+        .upsert(payload);
+
+    if (error) {
+        console.error('Error saving property:', error.message);
+        alert('Erro ao salvar imóvel: ' + error.message);
+    } else {
+        await fetchProperties();
+        setView(ViewState.ADMIN_PROPERTIES);
+        setEditingProperty({});
+    }
+    setIsLoading(false);
   };
 
-  const handleDeleteProperty = (id: string) => {
+  const handleDeleteProperty = async (id: string) => {
     if (window.confirm("Tem certeza que deseja excluir este imóvel?")) {
-      setProperties(prev => prev.filter(p => p.id !== id));
+        const { error } = await supabase
+            .from('properties')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error deleting property:', error.message);
+            alert('Erro ao excluir: ' + error.message);
+        } else {
+            fetchProperties();
+        }
+    }
+  };
+
+  const handleSeedDatabase = async () => {
+    if (window.confirm("Deseja inserir 4 imóveis de teste no banco de dados?")) {
+        setIsLoading(true);
+        const { error } = await supabase
+            .from('properties')
+            .insert(SAMPLE_PROPERTIES);
+        
+        if (error) {
+            alert("Erro ao criar imóveis teste: " + error.message);
+        } else {
+            await fetchProperties();
+            alert("Imóveis de teste criados com sucesso!");
+        }
+        setIsLoading(false);
     }
   };
 
@@ -886,7 +952,7 @@ const App: React.FC = () => {
           ))}
           {filteredProperties.length === 0 && (
             <div className="col-span-full text-center py-12 text-muted">
-              Nenhum imóvel encontrado com estes filtros.
+              {isLoading ? 'Carregando imóveis...' : 'Nenhum imóvel encontrado com estes filtros.'}
             </div>
           )}
         </div>
@@ -930,6 +996,8 @@ const App: React.FC = () => {
           onEdit={(p) => { setEditingProperty(p); setView(ViewState.ADMIN_FORM); }}
           onDelete={handleDeleteProperty}
           onNew={() => { setEditingProperty({}); setView(ViewState.ADMIN_FORM); }}
+          onSeed={handleSeedDatabase}
+          isLoading={isLoading}
         />
       )}
 
@@ -939,13 +1007,14 @@ const App: React.FC = () => {
           onSave={handleSaveProperty}
           onCancel={() => setView(ViewState.ADMIN_PROPERTIES)}
           onChange={setEditingProperty}
+          isLoading={isLoading}
         />
       )}
       
       {view === ViewState.ADMIN_SETTINGS && (
         <AdminSettings 
           settings={settings}
-          onSave={(s) => { setSettings(s); alert("Configurações salvas!"); }}
+          onSave={(s) => { setSettings(s); alert("Configurações salvas (Localmente)!"); }}
         />
       )}
     </div>
