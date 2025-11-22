@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Property, ViewState, PropertyType, SiteSettings, ThemeOption } from './types';
 import { generatePropertyDescription } from './services/geminiService';
@@ -14,7 +13,7 @@ import {
   LogOut, 
   Sparkles,
   CheckCircle,
-  Menu,
+  Menu, 
   X,
   MapPin,
   Bed,
@@ -57,9 +56,12 @@ interface ErrorBoundaryState {
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState;
+  // Fix: Explicitly declare props to satisfy TypeScript if inference fails
+  readonly props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
+    this.props = props;
     this.state = { hasError: false, error: null };
   }
 
@@ -939,6 +941,7 @@ const AppContent: React.FC = () => {
   const [filterType, setFilterType] = useState<PropertyType | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   
   // Admin State
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
@@ -957,6 +960,8 @@ const AppContent: React.FC = () => {
   useEffect(() => {
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
     localStorage.setItem('siteSettings', JSON.stringify(settings));
+    // Reset logo failed state when logo URL changes
+    setLogoFailed(false);
   }, [settings]);
 
   // FETCH PROPERTIES FROM SUPABASE
@@ -983,7 +988,7 @@ const AppContent: React.FC = () => {
         }
     } catch (err: any) {
         console.error("Critical Fetch Error:", err);
-        setDbError("Falha na conexão com o banco de dados. Verifique sua internet ou a configuração do Supabase.");
+        setDbError(err.message || "Falha na conexão com o banco de dados.");
     }
     setIsLoading(false);
   };
@@ -1072,10 +1077,11 @@ const AppContent: React.FC = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Error Banner */}
         {dbError && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex items-center gap-3">
+            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex items-center gap-3 animate-pulse">
                 <AlertTriangle />
                 <div>
                     <strong>Erro de Conexão:</strong> {dbError}
+                    <div className="text-xs mt-1">Se você está vendo isso, a chave do Supabase provavelmente está incorreta.</div>
                 </div>
                 <button onClick={fetchProperties} className="ml-auto bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm">Tentar Novamente</button>
             </div>
@@ -1212,21 +1218,18 @@ const AppContent: React.FC = () => {
              className="flex items-center gap-3 text-ocean-600 font-bold text-xl cursor-pointer"
              onClick={() => { setView(ViewState.HOME); setSelectedProperty(null); }}
            >
-             {settings.logoUrl ? (
+             {/* Logo Logic: Show Image if valid, otherwise Show SVG */}
+             {settings.logoUrl && !logoFailed ? (
                <img 
                   src={settings.logoUrl} 
                   alt="Logo" 
                   className="h-12 w-auto object-contain" 
-                  onError={(e) => {
-                    // Fallback if image fails (e.g. on Vercel deployment if local file missing)
-                    (e.target as HTMLImageElement).style.display = 'none';
-                    (e.target as HTMLImageElement).parentElement?.classList.add('fallback-logo-active');
-                  }}
+                  onError={() => setLogoFailed(true)}
                />
              ) : null}
              
-             {/* Show SVG if logo fails or is not set - handled by CSS/JS logic above roughly, but simpler to just render both conditionally */}
-             {(!settings.logoUrl || (document.querySelector('.fallback-logo-active'))) && (
+             {/* Fallback to SVG if logo image fails or is unset */}
+             {(!settings.logoUrl || logoFailed) && (
                 <UbatubaLogo className="h-12 w-12" />
              )}
 

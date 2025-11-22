@@ -1,28 +1,56 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // URL fixa do seu projeto
 const supabaseUrl = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
 
-// Chave Pública (Anon) fixa. 
-// É seguro usar essa chave no front-end se o RLS (Row Level Security) estiver ativado no banco.
+// Chave fornecida. OBS: Se esta chave não for um JWT padrão (começando com 'ey...'), 
+// o createClient pode falhar. Por isso adicionamos proteção abaixo.
 const DEFAULT_ANON_KEY = 'sb_publishable__hwpGDsikmzyMKKxiFtj1w_JrGA975Q';
 
-// Helper para tentar pegar do env var com segurança
-const getSupabaseKey = () => {
+let supabaseInstance: SupabaseClient;
+
+try {
+  // Tenta obter a chave de várias fontes
+  let key = DEFAULT_ANON_KEY;
   try {
     if (typeof process !== 'undefined' && process.env) {
-      // Tenta várias variáveis comuns no Vercel/Vite
-      if (process.env.SUPABASE_KEY) return process.env.SUPABASE_KEY;
-      if (process.env.NEXT_PUBLIC_SUPABASE_KEY) return process.env.NEXT_PUBLIC_SUPABASE_KEY;
-      if (process.env.VITE_SUPABASE_KEY) return process.env.VITE_SUPABASE_KEY;
+      key = process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_KEY || process.env.VITE_SUPABASE_KEY || DEFAULT_ANON_KEY;
     }
   } catch (e) {
-    // Ignora erro se process não existir
+    // Ignora erro de acesso ao process.env
   }
-  return DEFAULT_ANON_KEY;
-};
 
-const supabaseKey = getSupabaseKey();
+  // Tenta inicializar o cliente real
+  if (!supabaseUrl || !key) {
+    throw new Error("URL ou Key do Supabase ausentes.");
+  }
+  
+  supabaseInstance = createClient(supabaseUrl, key);
 
-// Create client instance
-export const supabase = createClient(supabaseUrl, supabaseKey);
+} catch (error) {
+  console.error("CRITICAL SUPABASE INIT ERROR (Client Fallback Activated):", error);
+  
+  // MOCK CLIENT: Permite que o site abra mesmo se a configuração do banco estiver quebrada.
+  // Retorna erros formatados para que o App.tsx mostre na tela ao invés de travar.
+  const mockErrorResponse = { 
+    data: null, 
+    error: { 
+      message: "Erro Crítico de Inicialização: Chave de API inválida ou Bloqueio de CORS. Verifique as configurações do Vercel.",
+      code: "CLIENT_INIT_ERROR"
+    } 
+  };
+  
+  // Cria um objeto falso que imita o Supabase mas só retorna erro
+  supabaseInstance = {
+    from: () => ({
+      select: () => Promise.resolve(mockErrorResponse),
+      insert: () => Promise.resolve(mockErrorResponse),
+      update: () => Promise.resolve(mockErrorResponse),
+      delete: () => Promise.resolve(mockErrorResponse),
+      upsert: () => Promise.resolve(mockErrorResponse),
+      order: () => Promise.resolve(mockErrorResponse),
+    })
+  } as unknown as SupabaseClient;
+}
+
+export const supabase = supabaseInstance;
