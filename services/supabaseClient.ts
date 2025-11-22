@@ -4,9 +4,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const supabaseUrl = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
 
 // Chave fornecida.
-// IMPORTANTE: Chaves do Supabase geralmente começam com "ey...". 
-// Se a sua começa com "sb_publishable", ela pode não funcionar diretamente com esta biblioteca.
-// Mas vamos tentar usá-la de forma segura.
+// Tenta usar a chave anon se disponível, ou a chave publishable fornecida como fallback
 const DEFAULT_ANON_KEY = 'sb_publishable__hwpGDsikmzyMKKxiFtj1w_JrGA975Q';
 
 let supabaseInstance: SupabaseClient;
@@ -22,27 +20,32 @@ try {
     // Ignora erro de acesso ao process.env em navegadores antigos
   }
 
-  // Tenta inicializar o cliente real
-  if (!supabaseUrl || !key) {
-    throw new Error("URL ou Key do Supabase ausentes.");
+  // Validação básica
+  if (!supabaseUrl) {
+    throw new Error("URL do Supabase ausente.");
   }
+
+  console.log("Iniciando Supabase com URL:", supabaseUrl);
   
-  // Inicializa o cliente. Se a chave for inválida, o Supabase pode não lançar erro aqui, 
-  // mas sim nas chamadas subsequentes (select, insert, etc).
+  // Inicializa o cliente
+  // Nota: Se a chave for inválida, operações futuras falharão, mas o createClient geralmente não lança erro síncrono
   supabaseInstance = createClient(supabaseUrl, key);
 
 } catch (error) {
   console.error("CRITICAL SUPABASE INIT ERROR (Client Fallback Activated):", error);
   
   // MOCK CLIENT: Permite que o site abra mesmo se a configuração do banco estiver quebrada.
+  // Isso previne a Tela Branca da Morte.
   const mockErrorResponse = { 
     data: null, 
     error: { 
-      message: "Erro Crítico de Inicialização: Chave de API inválida ou Bloqueio de CORS.",
-      code: "CLIENT_INIT_ERROR"
+      message: "Erro Crítico de Inicialização: Chave de API inválida ou Bloqueio de CORS. Verifique o console.",
+      code: "CLIENT_INIT_ERROR",
+      details: String(error)
     } 
   };
   
+  // Cria um objeto que imita a estrutura do Supabase para não quebrar o App.tsx
   supabaseInstance = {
     from: () => ({
       select: () => Promise.resolve(mockErrorResponse),
