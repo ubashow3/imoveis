@@ -41,7 +41,8 @@ import {
   UserCircle,
   Database,
   Copy,
-  AlertTriangle
+  AlertTriangle,
+  RefreshCw
 } from 'lucide-react';
 
 // --- UTILS ---
@@ -63,8 +64,8 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 // --- SQL SETUP CODE ---
-const SQL_SETUP_CODE = `-- 1. Criar a tabela de imóveis
-create table properties (
+const SQL_SETUP_CODE = `-- 1. Criar a tabela de imóveis (se não existir)
+create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   title text not null,
@@ -80,10 +81,11 @@ create table properties (
   views integer default 0
 );
 
--- 2. Habilitar segurança
+-- 2. Habilitar segurança (Row Level Security)
 alter table properties enable row level security;
 
--- 3. Criar política de acesso (Leitura/Escrita Públicas para o App)
+-- 3. REFAZ AS PERMISSÕES (Apaga a antiga e cria a nova para destravar)
+drop policy if exists "Public Access" on properties;
 create policy "Public Access" on properties for all using (true) with check (true);`;
 
 // --- SAMPLE DATA FOR SEEDING ---
@@ -206,10 +208,10 @@ const DatabaseSetup: React.FC = () => {
       <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6">
         <AlertTriangle size={48} />
       </div>
-      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Banco de Dados não Configurado</h1>
+      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Configuração do Banco de Dados</h1>
       <p className="text-muted max-w-2xl mb-8">
-        Detectamos que a tabela de imóveis ainda não existe no seu Supabase. 
-        Para o site funcionar, você precisa rodar o comando SQL abaixo no seu painel do Supabase.
+        Detectamos que a tabela de imóveis não existe ou está sem permissões de acesso.
+        Copie o código SQL abaixo e execute no painel do Supabase para corrigir o sistema.
       </p>
 
       <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left">
@@ -228,12 +230,19 @@ const DatabaseSetup: React.FC = () => {
         </pre>
       </div>
 
-      <div className="mt-8 text-sm text-muted">
+      <div className="mt-8 text-sm text-muted mb-6">
         <p>1. Copie o código acima.</p>
         <p>2. Vá ao seu projeto no Supabase > SQL Editor.</p>
         <p>3. Cole e clique em "Run".</p>
-        <p>4. Recarregue esta página.</p>
+        <p>4. Clique no botão abaixo para tentar novamente.</p>
       </div>
+
+      <button 
+        onClick={() => window.location.reload()}
+        className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 transition flex items-center gap-2"
+      >
+        <RefreshCw size={20} /> Tentar Novamente
+      </button>
     </div>
   );
 };
@@ -797,10 +806,12 @@ const AdminProperties: React.FC<{
          <div className="flex gap-2">
              <button 
                 onClick={onSeed}
-                className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-purple-200"
+                disabled={isLoading}
+                className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-purple-200 disabled:opacity-50"
                 title="Preencher com imóveis de teste"
              >
-                <Database size={18} /> <span className="hidden md:inline">Gerar Teste</span>
+                {isLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-700"></div> : <Database size={18} />} 
+                <span className="hidden md:inline">{isLoading ? 'Gerando...' : 'Gerar Teste'}</span>
              </button>
              <button 
                onClick={onNew}
@@ -966,7 +977,11 @@ const App: React.FC = () => {
             .insert(SAMPLE_PROPERTIES);
         
         if (error) {
-            alert("Erro ao criar imóveis teste: " + error.message);
+            alert("Erro ao criar imóveis teste: " + error.message + "\n\nDICA: Copie o código SQL na tela de configuração e rode no Supabase para corrigir as permissões.");
+            // Force show setup if error is likely permission/table related
+            if (error.code === '42P01' || error.message.includes('policy')) {
+                setShowDbSetup(true);
+            }
         } else {
             await fetchProperties();
             alert("Imóveis de teste criados com sucesso!");
@@ -1030,7 +1045,13 @@ const App: React.FC = () => {
           ))}
           {filteredProperties.length === 0 && (
             <div className="col-span-full text-center py-12 text-muted">
-              {isLoading ? 'Carregando imóveis...' : 'Nenhum imóvel encontrado com estes filtros.'}
+               <div className="flex flex-col items-center">
+                 <Building2 size={48} className="text-ocean-200 mb-4" />
+                 <p className="text-lg">Nenhum imóvel encontrado.</p>
+                 {properties.length === 0 && (
+                   <p className="text-sm mt-2">Vá para a Área Administrativa para cadastrar ou gerar imóveis.</p>
+                 )}
+               </div>
             </div>
           )}
         </div>
@@ -1194,4 +1215,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-    
