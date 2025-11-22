@@ -56,7 +56,6 @@ interface ErrorBoundaryState {
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState;
-  // Fix: Explicitly declare props to satisfy TypeScript if inference fails
   readonly props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) {
@@ -83,12 +82,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
               <h1 className="text-2xl font-bold">Ops! Ocorreu um erro crítico.</h1>
             </div>
             <p className="text-gray-600 mb-4">
-              O aplicativo encontrou um problema inesperado e precisou ser interrompido para evitar falhas maiores.
+              O aplicativo encontrou um problema inesperado e precisou ser interrompido.
             </p>
             <div className="bg-gray-900 text-red-300 p-4 rounded-lg overflow-auto font-mono text-sm mb-6">
               {this.state.error?.message || "Erro desconhecido"}
-              <br/>
-              <span className="text-gray-500 mt-2 block text-xs">Project ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy</span>
             </div>
             <button 
               onClick={() => window.location.reload()}
@@ -220,18 +217,13 @@ const SAMPLE_PROPERTIES = [
 const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="100" cy="100" r="95" stroke="currentColor" strokeWidth="8" className="text-ocean-600" fill="white"/>
-    {/* Roof */}
     <path d="M30 90 L100 40 L170 90" stroke="currentColor" strokeWidth="8" strokeLinecap="round" className="text-ocean-800"/>
     <path d="M55 72 L55 55 L65 55 L65 65" stroke="currentColor" strokeWidth="6" className="text-ocean-800"/>
     <rect x="60" y="90" width="20" height="20" fill="currentColor" className="text-ocean-800"/>
     <rect x="120" y="90" width="20" height="20" fill="currentColor" className="text-ocean-800"/>
-    
-    {/* Text */}
     <text x="100" y="135" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="28" fill="black" letterSpacing="-1">ALUGA-SE</text>
     <text x="100" y="160" textAnchor="middle" fontFamily="Arial, sans-serif" fontWeight="900" fontSize="28" className="fill-ocean-600" letterSpacing="-1">UBATUBA</text>
     <text x="160" y="175" textAnchor="end" fontFamily="Arial, sans-serif" fontWeight="bold" fontSize="12" className="fill-ocean-600">.COM</text>
-    
-    {/* Waves */}
     <path d="M20 115 Q 50 105, 80 115 T 140 115 T 180 105" stroke="currentColor" strokeWidth="4" fill="none" className="text-ocean-400"/>
   </svg>
 );
@@ -254,7 +246,6 @@ const INITIAL_SETTINGS: SiteSettings = {
 };
 
 // --- COMPONENTS ---
-
 const DatabaseSetup: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
@@ -336,7 +327,7 @@ const PropertyDetails: React.FC<{
 
   const handleBooking = () => {
     let message = '';
-    let phone = bookingPhone || '5512999999999'; // Fallback
+    let phone = bookingPhone || '5512999999999'; 
     
     if (property.type === 'rent_seasonal') {
       const total = calculateTotal();
@@ -444,7 +435,7 @@ const PropertyDetails: React.FC<{
           </div>
         </div>
 
-        {/* Booking / Contact Widget (Below features on mobile due to grid order, side on desktop) */}
+        {/* Booking / Contact Widget */}
         <div className="lg:col-span-1">
            <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-lg sticky top-24">
               <div className="mb-6">
@@ -857,7 +848,7 @@ const AdminProperties: React.FC<{
   onEdit: (p: Property) => void;
   onDelete: (id: string) => void;
   onNew: () => void;
-  onSeed: () => void; // New prop for seeding
+  onSeed: () => void; 
   isLoading: boolean;
 }> = ({ properties, onEdit, onDelete, onNew, onSeed, isLoading }) => {
   return (
@@ -947,20 +938,16 @@ const AppContent: React.FC = () => {
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
   const [showDbSetup, setShowDbSetup] = useState(false);
 
-  // Apply theme on init
   useEffect(() => {
-    // Load settings from local storage if available
     const savedSettings = localStorage.getItem('siteSettings');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
-    console.log("App Initialized. Project ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy");
   }, []);
 
   useEffect(() => {
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
     localStorage.setItem('siteSettings', JSON.stringify(settings));
-    // Reset logo failed state when logo URL changes
     setLogoFailed(false);
   }, [settings]);
 
@@ -975,7 +962,6 @@ const AppContent: React.FC = () => {
           .order('created_at', { ascending: false });
         
         if (error) {
-          console.error('Supabase Error:', error);
           // Check if table missing (Postgres code 42P01) or specific message
           if (error.code === '42P01' || error.message.includes('relation "properties" does not exist')) {
             setShowDbSetup(true);
@@ -1006,7 +992,6 @@ const AppContent: React.FC = () => {
   const handleSaveProperty = async (propertyToSave: Partial<Property>) => {
     setIsLoading(true);
     try {
-        // If it's a new property (no ID), remove the ID field so Supabase generates a UUID
         const payload = { ...propertyToSave };
         if (!payload.id) {
             delete payload.id;
@@ -1053,7 +1038,6 @@ const AppContent: React.FC = () => {
         
         if (error) {
             alert("Erro ao criar imóveis teste: " + error.message + "\n\nDICA: Copie o código SQL na tela de configuração e rode no Supabase para corrigir as permissões.");
-            // Force show setup if error is likely permission/table related
             if (error.code === '42P01' || error.message.includes('policy')) {
                 setShowDbSetup(true);
             }
@@ -1081,7 +1065,10 @@ const AppContent: React.FC = () => {
                 <AlertTriangle />
                 <div>
                     <strong>Erro de Conexão:</strong> {dbError}
-                    <div className="text-xs mt-1">Se você está vendo isso, a chave do Supabase provavelmente está incorreta.</div>
+                    <div className="text-xs mt-1">
+                       Dica: Se a chave do Supabase começa com 'sb_publishable', ela pode não ser compatível.
+                       Verifique se você tem a chave 'anon' que começa com 'ey...' no painel do Supabase.
+                    </div>
                 </div>
                 <button onClick={fetchProperties} className="ml-auto bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm">Tentar Novamente</button>
             </div>
@@ -1304,8 +1291,6 @@ const AppContent: React.FC = () => {
           </div>
           <div className="container mx-auto px-4 mt-8 pt-8 border-t border-ocean-800 text-center text-xs text-ocean-300">
              &copy; 2024 {settings.siteName}. Todos os direitos reservados.
-             <br/>
-             <span className="opacity-30">v1.0.5 | ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy</span>
           </div>
        </footer>
     </div>
