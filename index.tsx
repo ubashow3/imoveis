@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 
+// --- VERCEL CRASH PROTECTION ---
+// Este arquivo garante que o site não fique em tela branca se houver erro.
+
 const rootElement = document.getElementById('root');
 if (!rootElement) {
   throw new Error("Could not find root element to mount to");

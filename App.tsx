@@ -44,6 +44,8 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+// --- ATUALIZAÇÃO VERCEL FIX ---
+
 // --- ERROR BOUNDARY COMPONENT ---
 interface ErrorBoundaryProps {
   children?: React.ReactNode;
@@ -936,7 +938,7 @@ const AppContent: React.FC = () => {
   const loadingTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
-    console.log("App Initializing...");
+    console.log("App Initializing... Vercel Update Check");
     const savedSettings = localStorage.getItem('siteSettings');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));

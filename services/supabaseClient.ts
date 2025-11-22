@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
+// --- ATUALIZAÇÃO VERCEL FIX ---
 // URL do projeto
 const SUPABASE_URL = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
 
@@ -13,7 +14,7 @@ let supabaseInstance: SupabaseClient;
 const createMockClient = (errorMessage: string) => {
   console.error("Ativando Mock Client devido a erro:", errorMessage);
   
-  // Mock chainable builder
+  // Mock chainable builder para evitar crash de .select() is not a function
   const mockBuilder = {
     select: () => mockBuilder,
     order: () => mockBuilder,
@@ -28,7 +29,7 @@ const createMockClient = (errorMessage: string) => {
       error: { 
         message: errorMessage,
         code: "CONNECTION_ERROR",
-        details: "Verifique o console para mais detalhes."
+        details: "Verifique o console para mais detalhes. (Chave ou URL inválida)"
       } 
     })
   };
@@ -44,15 +45,15 @@ const createMockClient = (errorMessage: string) => {
 
 try {
   // Tenta criar o cliente com a chave fixa correta
-  // O trim() remove espaços em branco acidentais na cópia
   if (!VALID_KEY || !VALID_KEY.startsWith('ey')) {
      throw new Error("Formato de chave inválido (deve começar com 'ey').");
   }
   
+  // O trim() remove espaços em branco acidentais na cópia
   supabaseInstance = createClient(SUPABASE_URL, VALID_KEY.trim());
-  console.log("Supabase cliente iniciado com sucesso.");
+  console.log("Supabase: Cliente iniciado com sucesso (Versão Blindada).");
 } catch (error: any) {
-  console.error("Erro fatal ao iniciar Supabase:", error);
+  console.error("Supabase: Erro fatal na inicialização:", error);
   supabaseInstance = createMockClient(error.message || "Erro desconhecido na inicialização");
 }
 
