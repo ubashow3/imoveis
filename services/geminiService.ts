@@ -3,8 +3,9 @@ import { GoogleGenAI } from "@google/genai";
 // Helper seguro para pegar variáveis de ambiente sem quebrar o site
 const getApiKey = () => {
   try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
+    if (typeof process !== 'undefined' && process.env) {
+      // Verifica a chave padrão ou a chave do Vercel AI Gateway
+      return process.env.API_KEY || process.env.AI_GATEWAY_API_KEY || '';
     }
   } catch (e) {
     // Ignora erro se process não existir
@@ -24,7 +25,7 @@ export const generatePropertyDescription = async (
     // Se não tiver chave, retorna erro amigável sem travar o app
     if (!apiKey) {
       console.warn("API_KEY não encontrada. A IA não será iniciada.");
-      return "Chave de API da IA não configurada. Verifique o painel do Vercel.";
+      return "Chave de API da IA não configurada. Verifique o painel do Vercel (Environment Variables).";
     }
 
     // Initialize AI only when needed
