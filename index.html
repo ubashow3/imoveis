@@ -84,16 +84,21 @@
         --text-muted: #4b5563;
       }
       
-      /* Initial Loading State */
-      #root:empty::before {
-        content: 'Carregando Sistema...';
+      /* Initial Loading State - HTML based */
+      #loading-screen {
         display: flex;
         justify-content: center;
         align-items: center;
         height: 100vh;
+        width: 100vw;
         font-family: sans-serif;
         color: #6b7280;
         font-size: 1.2rem;
+        position: fixed;
+        top: 0;
+        left: 0;
+        background: white;
+        z-index: 9999;
       }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -143,6 +148,20 @@
 </script>
 </head>
   <body class="bg-page text-main transition-colors duration-300">
+    <div id="loading-screen">Carregando Sistema...</div>
     <div id="root"></div>
+    <script>
+      // Remove loader when React mounts
+      window.addEventListener('load', () => {
+        const observer = new MutationObserver((mutations) => {
+           if (document.getElementById('root').childElementCount > 0) {
+             const loader = document.getElementById('loading-screen');
+             if (loader) loader.style.display = 'none';
+             observer.disconnect();
+           }
+        });
+        observer.observe(document.getElementById('root'), { childList: true });
+      });
+    </script>
   </body>
 </html>

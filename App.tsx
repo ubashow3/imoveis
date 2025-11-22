@@ -933,7 +933,7 @@ const AppContent: React.FC = () => {
   const [showDbSetup, setShowDbSetup] = useState(false);
 
   // SAFETY TIMEOUT REF
-  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const loadingTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
     console.log("App Initializing...");
@@ -955,14 +955,14 @@ const AppContent: React.FC = () => {
     setIsLoading(true);
     setDbError(null);
 
-    // Safety Timeout: If database hangs, unlock UI after 10 seconds
+    // Safety Timeout: If database hangs, unlock UI after 5 seconds
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
         if (isLoading) {
             setIsLoading(false);
             setDbError("Tempo limite excedido. Verifique sua conexão ou tente recarregar.");
         }
-    }, 10000);
+    }, 5000);
 
     try {
         const { data, error } = await supabase

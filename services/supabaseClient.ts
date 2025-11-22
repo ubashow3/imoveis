@@ -50,7 +50,7 @@ try {
   }
   
   supabaseInstance = createClient(SUPABASE_URL, VALID_KEY.trim());
-  console.log("Supabase cliente iniciado.");
+  console.log("Supabase cliente iniciado com sucesso.");
 } catch (error: any) {
   console.error("Erro fatal ao iniciar Supabase:", error);
   supabaseInstance = createMockClient(error.message || "Erro desconhecido na inicialização");
