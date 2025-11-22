@@ -1,129 +1,61 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Component } from 'react';
 import { Property, ViewState, PropertyType, SiteSettings, ThemeOption } from './types';
 import { generatePropertyDescription } from './services/geminiService';
-import { supabase } from './services/supabaseClient'; // Import Supabase Client
+import { supabase } from './services/supabaseClient';
 import { PropertyCard } from './components/PropertyCard';
 import { 
-  LayoutDashboard, 
-  Plus, 
-  Search, 
-  Umbrella, 
-  Building2, 
-  ArrowLeft, 
-  LogOut, 
-  Sparkles,
-  CheckCircle,
-  Menu, 
-  X,
-  MapPin,
-  Bed,
-  Bath,
-  Expand,
-  Waves,
-  Settings,
-  Instagram,
-  Facebook,
-  Phone,
-  Clock,
-  Mail,
-  Palette,
-  Save,
-  Trash2,
-  Image as ImageIcon,
-  Edit,
-  Users,
-  Calendar,
-  Upload,
-  Camera,
-  ChevronLeft,
-  ChevronRight,
-  UserCircle,
-  Database,
-  Copy,
-  AlertTriangle,
-  RefreshCw
+  LayoutDashboard, Plus, Search, Umbrella, Building2, ArrowLeft, LogOut, Sparkles,
+  CheckCircle, Menu, X, MapPin, Bed, Bath, Expand, Waves, Settings, Instagram,
+  Facebook, Phone, Clock, Mail, Palette, Save, Trash2, Image as ImageIcon, Edit,
+  Users, Calendar, Upload, Camera, ChevronLeft, ChevronRight, UserCircle, Database,
+  Copy, AlertTriangle, RefreshCw
 } from 'lucide-react';
 
-// --- ATUALIZAÇÃO VERCEL FIX ---
+// --- ERROR BOUNDARY ---
+interface ErrorBoundaryProps { children?: React.ReactNode; }
+interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
 
-// --- ERROR BOUNDARY COMPONENT ---
-interface ErrorBoundaryProps {
-  children?: React.ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-  error: Error | null;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  public state: ErrorBoundaryState;
-  public props: ErrorBoundaryProps;
-
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
-    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("CRITICAL APP ERROR:", error, errorInfo);
-  }
-
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-          <div className="bg-white p-8 rounded-xl shadow-xl max-w-2xl w-full border border-red-200">
-            <div className="flex items-center gap-3 text-red-600 mb-4">
-              <AlertTriangle size={32} />
-              <h1 className="text-2xl font-bold">Ops! Ocorreu um erro crítico.</h1>
-            </div>
-            <p className="text-gray-600 mb-4">
-              O aplicativo encontrou um problema inesperado e precisou ser interrompido.
-            </p>
-            <div className="bg-gray-900 text-red-300 p-4 rounded-lg overflow-auto font-mono text-sm mb-6">
-              {this.state.error?.message || "Erro desconhecido"}
-            </div>
-            <button 
-              onClick={() => window.location.reload()}
-              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition font-bold w-full"
-            >
-              Recarregar Página
-            </button>
+        <div className="min-h-screen flex items-center justify-center bg-red-50 p-4 text-center">
+          <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg">
+            <AlertTriangle size={48} className="mx-auto text-red-600 mb-4" />
+            <h1 className="text-xl font-bold text-red-700 mb-2">Erro de Renderização</h1>
+            <p className="text-gray-600 mb-4">Ocorreu um erro ao exibir a interface.</p>
+            <pre className="bg-gray-100 p-2 rounded text-xs text-left overflow-auto mb-4">
+              {this.state.error?.message}
+            </pre>
+            <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-4 py-2 rounded">Recarregar</button>
           </div>
         </div>
       );
     }
-
     return this.props.children;
   }
 }
 
 // --- UTILS ---
-const maskPhone = (value: string) => {
-  return value
-    .replace(/\D/g, '')
-    .replace(/(\d{2})(\d)/, '($1) $2')
-    .replace(/(\d{5})(\d)/, '$1-$2')
-    .replace(/(-\d{4})\d+?$/, '$1');
-};
+const maskPhone = (value: string) => value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').replace(/(-\d{4})\d+?$/, '$1');
+const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = () => resolve(reader.result as string);
+  reader.onerror = error => reject(error);
+});
 
-const fileToBase64 = (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = error => reject(error);
-  });
-};
-
-// --- SQL SETUP CODE ---
-const SQL_SETUP_CODE = `-- 1. Criar a tabela de imóveis (se não existir)
+// --- SQL SETUP ---
+const SQL_SETUP_CODE = `-- Criar tabela (seguro)
 create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -139,83 +71,39 @@ create table if not exists properties (
   images text[],
   views integer default 0
 );
-
--- 2. Habilitar segurança (Row Level Security)
 alter table properties enable row level security;
-
--- 3. REFAZ AS PERMISSÕES (Apaga a antiga e cria a nova para destravar)
 drop policy if exists "Public Access" on properties;
 create policy "Public Access" on properties for all using (true) with check (true);`;
 
-// --- SAMPLE DATA ---
 const SAMPLE_PROPERTIES = [
   {
     title: "Casa de Alto Padrão em Itamambuca",
-    description: "Espetacular casa pé na areia com piscina e área gourmet completa. Ideal para famílias grandes que buscam conforto e privacidade em meio à natureza.",
+    description: "Espetacular casa pé na areia com piscina e área gourmet completa.",
     location: "Itamambuca, Ubatuba",
     price: 3500,
     type: "rent_seasonal",
     bedrooms: 5,
     bathrooms: 6,
     area: 450,
-    features: ["Piscina", "Churrasqueira", "Ar Condicionado", "Wi-Fi", "Jardim", "Vista para Montanha"],
-    images: [
-      "https://images.unsplash.com/photo-1600596542815-60c37c6525fa?q=80&w=1000&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1512917774080-9991f1c4c750?q=80&w=1000&auto=format&fit=crop"
-    ],
+    features: ["Piscina", "Churrasqueira", "Ar Condicionado", "Wi-Fi", "Jardim"],
+    images: ["https://images.unsplash.com/photo-1600596542815-60c37c6525fa?auto=format&fit=crop&w=800"],
     views: 120
   },
   {
     title: "Apartamento Vista Mar Praia Grande",
-    description: "Apartamento moderno e recém reformado no melhor ponto da Praia Grande. Varanda gourmet envidraçada com vista total para o mar.",
+    description: "Apartamento moderno e recém reformado no melhor ponto da Praia Grande.",
     location: "Praia Grande, Ubatuba",
     price: 850000,
     type: "sale",
     bedrooms: 3,
     bathrooms: 2,
     area: 110,
-    features: ["Vista Mar", "Varanda Gourmet", "Mobiliado", "Elevador", "Portaria 24h"],
-    images: [
-      "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?q=80&w=1000&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?q=80&w=1000&auto=format&fit=crop"
-    ],
+    features: ["Vista Mar", "Varanda Gourmet", "Mobiliado", "Elevador"],
+    images: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800"],
     views: 450
-  },
-  {
-    title: "Chalé Aconchegante no Prumirim",
-    description: "Refúgio romântico cercado pela mata atlântica. Acesso fácil à cachoeira e praia. Perfeito para casais.",
-    location: "Prumirim, Ubatuba",
-    price: 600,
-    type: "rent_seasonal",
-    bedrooms: 1,
-    bathrooms: 1,
-    area: 60,
-    features: ["Lareira", "Deck de Madeira", "Cozinha Equipada", "Pet Friendly"],
-    images: [
-      "https://images.unsplash.com/photo-1449844908441-8829872d2607?q=80&w=1000&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1587061949409-02df41d5e562?q=80&w=1000&auto=format&fit=crop"
-    ],
-    views: 89
-  },
-  {
-    title: "Cobertura Duplex no Tenório",
-    description: "Cobertura exclusiva com jacuzzi privativa no terraço. Vista panorâmica da baía do Tenório e Praia Vermelha.",
-    location: "Tenório, Ubatuba",
-    price: 1200000,
-    type: "sale",
-    bedrooms: 4,
-    bathrooms: 4,
-    area: 220,
-    features: ["Jacuzzi", "Vista Panorâmica", "Duas Vagas", "Condomínio Clube"],
-    images: [
-      "https://images.unsplash.com/photo-1512915922686-57c11dde9b6b?q=80&w=1000&auto=format&fit=crop",
-      "https://images.unsplash.com/photo-1574362848149-11496d93a7c7?q=80&w=1000&auto=format&fit=crop"
-    ],
-    views: 310
   }
 ];
 
-// --- CUSTOM LOGO COMPONENT ---
 const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
     <circle cx="100" cy="100" r="95" stroke="currentColor" strokeWidth="8" className="text-ocean-600" fill="white"/>
@@ -241,682 +129,97 @@ const INITIAL_SETTINGS: SiteSettings = {
     email: 'contato@alugaseubatuba.com.br',
     hours: 'Seg a Sex: 09h - 18h | Sáb: 09h - 13h'
   },
-  social: {
-    instagram: '@alugaseubatuba',
-    facebook: '/alugaseubatuba'
-  }
+  social: { instagram: '@alugaseubatuba', facebook: '/alugaseubatuba' }
 };
 
-// --- COMPONENTS ---
+// --- SUB-COMPONENTS ---
 const DatabaseSetup: React.FC = () => {
   const [copied, setCopied] = useState(false);
-
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SETUP_CODE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
   return (
     <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6">
-        <AlertTriangle size={48} />
-      </div>
+      <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
       <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Configuração do Banco de Dados</h1>
-      <p className="text-muted max-w-2xl mb-8">
-        Detectamos que a tabela de imóveis não existe ou está sem permissões de acesso.
-        Copie o código SQL abaixo e execute no painel do Supabase para corrigir o sistema.
-      </p>
-
-      <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left">
+      <p className="text-muted max-w-2xl mb-8">A tabela de imóveis não existe ou está inacessível.</p>
+      <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
         <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
-          <span className="text-gray-400 text-sm font-mono">SQL Editor</span>
-          <button 
-            onClick={handleCopy}
-            className="flex items-center gap-2 text-white hover:text-ocean-300 text-sm font-medium transition"
-          >
-            {copied ? <CheckCircle size={16} className="text-green-400"/> : <Copy size={16} />}
-            {copied ? 'Copiado!' : 'Copiar SQL'}
-          </button>
+          <span className="text-gray-400 text-sm font-mono">SQL</span>
+          <button onClick={handleCopy} className="text-white hover:text-ocean-300 text-sm font-medium">{copied ? 'Copiado!' : 'Copiar SQL'}</button>
         </div>
-        <pre className="p-6 overflow-x-auto text-sm md:text-base font-mono text-green-400">
-          <code>{SQL_SETUP_CODE}</code>
-        </pre>
+        <pre className="p-6 overflow-x-auto text-sm text-green-400 font-mono"><code>{SQL_SETUP_CODE}</code></pre>
       </div>
-
-      <div className="mt-8 text-sm text-muted mb-6">
-        <p>1. Copie o código acima.</p>
-        <p>2. Vá ao seu projeto no Supabase > SQL Editor.</p>
-        <p>3. Cole e clique em "Run".</p>
-        <p>4. Clique no botão abaixo para tentar novamente.</p>
-      </div>
-
-      <button 
-        onClick={() => window.location.reload()}
-        className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 transition flex items-center gap-2"
-      >
-        <RefreshCw size={20} /> Tentar Novamente
-      </button>
+      <button onClick={() => window.location.reload()} className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 flex items-center gap-2"><RefreshCw size={20} /> Tentar Novamente</button>
     </div>
   );
 };
 
-const PropertyDetails: React.FC<{
-  property: Property;
-  onBack: () => void;
-  bookingPhone: string;
-}> = ({ property, onBack, bookingPhone }) => {
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-
-  const images = property.images && property.images.length > 0 
-    ? property.images 
-    : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
-
-  const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookingPhone: string; }> = ({ property, onBack, bookingPhone }) => {
+  const [imgIdx, setImgIdx] = useState(0);
+  const [start, setStart] = useState('');
+  const [end, setEnd] = useState('');
+  const images = property.images?.length ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
+  
+  const calcTotal = () => {
+    if (!start || !end) return 0;
+    const diff = Math.ceil(Math.abs(new Date(end).getTime() - new Date(start).getTime()) / (1000 * 3600 * 24));
+    return diff * property.price;
   };
 
-  const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
-  };
-
-  const calculateTotal = () => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays * property.price;
-  };
-
-  const handleBooking = () => {
-    let message = '';
-    let phone = bookingPhone || '5512999999999'; 
-    
-    if (property.type === 'rent_seasonal') {
-      const total = calculateTotal();
-      message = `Olá! Gostaria de reservar o imóvel "${property.title}" de ${startDate} a ${endDate}. Total estimado: R$ ${total}.`;
-    } else {
-      message = `Olá! Tenho interesse em comprar o imóvel "${property.title}" (ID: ${property.id}).`;
-    }
-    
-    const whatsappUrl = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
+  const handleBook = () => {
+    const msg = property.type === 'rent_seasonal' 
+      ? `Olá! Gostaria de reservar "${property.title}" de ${start} a ${end}.` 
+      : `Olá! Tenho interesse em comprar "${property.title}".`;
+    window.open(`https://wa.me/${bookingPhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
     <div className="container mx-auto px-4 py-6">
-      <button 
-        onClick={onBack} 
-        className="flex items-center text-muted hover:text-ocean-600 mb-4"
-      >
-        <ArrowLeft size={20} className="mr-2" /> Voltar
-      </button>
-
-      {/* Carousel */}
+      <button onClick={onBack} className="flex items-center text-muted hover:text-ocean-600 mb-4"><ArrowLeft size={20} className="mr-2"/> Voltar</button>
       <div className="relative h-[300px] md:h-[500px] bg-gray-100 rounded-2xl overflow-hidden mb-8 group">
-        <img 
-          src={images[currentImageIndex]} 
-          alt={property.title} 
-          className="w-full h-full object-cover transition-opacity duration-300"
-        />
-        
+        <img src={images[imgIdx]} alt={property.title} className="w-full h-full object-cover" />
         {images.length > 1 && (
           <>
-            <button 
-              onClick={(e) => { e.stopPropagation(); prevImage(); }}
-              className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition"
-            >
-              <ChevronLeft size={24} />
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); nextImage(); }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 hover:bg-black/50 text-white p-2 rounded-full backdrop-blur-sm transition"
-            >
-              <ChevronRight size={24} />
-            </button>
-            <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">
-              {currentImageIndex + 1} / {images.length}
-            </div>
+            <button onClick={() => setImgIdx((prev) => (prev - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full text-white"><ChevronLeft /></button>
+            <button onClick={() => setImgIdx((prev) => (prev + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full text-white"><ChevronRight /></button>
+            <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm">{imgIdx + 1} / {images.length}</div>
           </>
         )}
       </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <div className="mb-6">
-            <span className="text-ocean-600 font-bold text-sm uppercase tracking-wider">
-              {property.type === 'sale' ? 'Venda' : 'Aluguel de Temporada'}
-            </span>
-            <h1 className="text-3xl font-bold text-main mt-1">{property.title}</h1>
-            <div className="flex items-center text-muted mt-2">
-              <MapPin size={18} className="mr-1" />
-              {property.location}
-            </div>
-          </div>
-
+          <h1 className="text-3xl font-bold text-main">{property.title}</h1>
+          <div className="flex items-center text-muted mt-2"><MapPin size={18} className="mr-1" /> {property.location}</div>
           <div className="flex gap-6 border-y border-ocean-100 py-6 my-6">
-            <div className="flex flex-col items-center">
-              <Bed size={24} className="text-ocean-500 mb-1" />
-              <span className="font-semibold text-main">{property.bedrooms}</span>
-              <span className="text-xs text-muted">Quartos</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <Bath size={24} className="text-ocean-500 mb-1" />
-              <span className="font-semibold text-main">{property.bathrooms}</span>
-              <span className="text-xs text-muted">Banheiros</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <Expand size={24} className="text-ocean-500 mb-1" />
-              <span className="font-semibold text-main">{property.area} m²</span>
-              <span className="text-xs text-muted">Área</span>
-            </div>
-             <div className="flex flex-col items-center">
-              <Users size={24} className="text-ocean-500 mb-1" />
-              <span className="font-semibold text-main">{property.views}</span>
-              <span className="text-xs text-muted">Visitas</span>
-            </div>
+             <div className="text-center"><Bed className="mx-auto text-ocean-500"/> <b>{property.bedrooms}</b></div>
+             <div className="text-center"><Bath className="mx-auto text-ocean-500"/> <b>{property.bathrooms}</b></div>
+             <div className="text-center"><Expand className="mx-auto text-ocean-500"/> <b>{property.area} m²</b></div>
           </div>
-
-          <div className="prose max-w-none text-muted mb-8">
-            <h3 className="text-lg font-bold text-main mb-2">Sobre o Imóvel</h3>
-            <p className="whitespace-pre-line">{property.description}</p>
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-lg font-bold text-main mb-3">O que este lugar oferece</h3>
-            <div className="flex flex-wrap gap-2">
-              {property.features?.map((feature, idx) => (
-                <span key={idx} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center">
-                  <CheckCircle size={14} className="mr-1" /> {feature}
-                </span>
-              ))}
-            </div>
+          <p className="whitespace-pre-line text-muted mb-8">{property.description}</p>
+          <div className="flex flex-wrap gap-2 mb-8">
+            {property.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center"><CheckCircle size={14} className="mr-1"/>{f}</span>)}
           </div>
         </div>
-
         <div className="lg:col-span-1">
-           <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-lg sticky top-24">
-              <div className="mb-6">
-                <span className="text-3xl font-bold text-ocean-600">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
-                </span>
-                {property.type === 'rent_seasonal' && <span className="text-muted font-normal"> /dia</span>}
-              </div>
-
-              {property.type === 'rent_seasonal' && (
-                <div className="mb-6 space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-xs font-bold text-muted mb-1 uppercase">Check-in</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 border border-ocean-200 rounded-lg focus:border-ocean-500 outline-none text-sm"
-                        value={startDate}
-                        onChange={(e) => setStartDate(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-muted mb-1 uppercase">Check-out</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 border border-ocean-200 rounded-lg focus:border-ocean-500 outline-none text-sm"
-                        value={endDate}
-                        onChange={(e) => setEndDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  
-                  {startDate && endDate && (
-                     <div className="bg-ocean-50 p-3 rounded-lg flex justify-between items-center text-sm">
-                        <span>Total estimado:</span>
-                        <span className="font-bold text-ocean-700">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal())}
-                        </span>
-                     </div>
-                  )}
-                </div>
-              )}
-
-              <button 
-                onClick={handleBooking}
-                className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-md mb-4"
-              >
-                 <Phone size={20} />
-                 {property.type === 'rent_seasonal' ? 'Solicitar Reserva' : 'Tenho Interesse'}
-              </button>
-              
-              <div className="text-center text-xs text-muted">
-                Você será redirecionado para o WhatsApp.
-              </div>
-           </div>
+          <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-lg sticky top-24">
+             <div className="mb-6 text-3xl font-bold text-ocean-600">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
+                {property.type === 'rent_seasonal' && <span className="text-sm text-muted font-normal"> /dia</span>}
+             </div>
+             {property.type === 'rent_seasonal' && (
+               <div className="mb-6 space-y-4">
+                 <input type="date" className="w-full p-2 border rounded" value={start} onChange={e => setStart(e.target.value)} />
+                 <input type="date" className="w-full p-2 border rounded" value={end} onChange={e => setEnd(e.target.value)} />
+                 {start && end && <div className="bg-ocean-50 p-3 rounded font-bold text-center">Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calcTotal())}</div>}
+               </div>
+             )}
+             <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Phone size={20} /> Contatar</button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-};
-
-const AdminForm: React.FC<{
-  property: Partial<Property>;
-  onSave: (p: Partial<Property>) => void;
-  onCancel: () => void;
-  onChange: (p: Partial<Property>) => void;
-  isLoading: boolean;
-}> = ({ property, onSave, onCancel, onChange, isLoading }) => {
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
-  const [tempFeature, setTempFeature] = useState('');
-
-  const handleGenerateDescription = async () => {
-    if (!property.features || !property.location || !property.type || !property.bedrooms) {
-      alert("Preencha localização, tipo, quartos e características primeiro.");
-      return;
-    }
-    setIsGeneratingAI(true);
-    const desc = await generatePropertyDescription(
-      property.features,
-      property.location,
-      property.type,
-      property.bedrooms
-    );
-    onChange({ ...property, description: desc });
-    setIsGeneratingAI(false);
-  };
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-        try {
-            const newImages: string[] = [];
-            for (let i = 0; i < e.target.files.length; i++) {
-                const base64 = await fileToBase64(e.target.files[i]);
-                newImages.push(base64);
-            }
-            onChange({
-                ...property,
-                images: [...(property.images || []), ...newImages]
-            });
-        } catch (error) {
-            console.error("Error uploading images", error);
-        }
-    }
-  };
-
-  return (
-    <div className="bg-card rounded-xl shadow-sm border border-ocean-100 p-6 max-w-4xl mx-auto">
-       <div className="flex items-center mb-6">
-         <button onClick={onCancel} className="mr-4 p-2 hover:bg-gray-100 rounded-full text-main">
-           <ArrowLeft size={20} />
-         </button>
-         <h2 className="text-xl font-bold text-main">{property.id ? 'Editar Imóvel' : 'Novo Imóvel'}</h2>
-       </div>
-
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-         <div className="col-span-2 md:col-span-1">
-           <label className="block text-sm font-medium mb-1 text-main">Título</label>
-           <input 
-             className="w-full p-2 border rounded-lg bg-white text-main"
-             value={property.title || ''}
-             onChange={e => onChange({...property, title: e.target.value})}
-           />
-         </div>
-         <div>
-            <label className="block text-sm font-medium mb-1 text-main">Tipo</label>
-            <select 
-              className="w-full p-2 border rounded-lg bg-white text-main"
-              value={property.type || 'sale'}
-              onChange={e => onChange({...property, type: e.target.value as PropertyType})}
-            >
-              <option value="sale">Venda</option>
-              <option value="rent_seasonal">Temporada</option>
-            </select>
-         </div>
-         <div>
-            <label className="block text-sm font-medium mb-1 text-main">Preço (R$)</label>
-            <input 
-              type="number"
-              className="w-full p-2 border rounded-lg bg-white text-main"
-              value={property.price || ''}
-              onChange={e => onChange({...property, price: Number(e.target.value)})}
-            />
-         </div>
-         <div>
-            <label className="block text-sm font-medium mb-1 text-main">Localização</label>
-            <input 
-              className="w-full p-2 border rounded-lg bg-white text-main"
-              value={property.location || ''}
-              onChange={e => onChange({...property, location: e.target.value})}
-            />
-         </div>
-
-         <div className="grid grid-cols-3 gap-4 col-span-2">
-            <div>
-               <label className="block text-sm font-medium mb-1 text-main">Quartos</label>
-               <input type="number" className="w-full p-2 border rounded-lg bg-white text-main" value={property.bedrooms || ''} onChange={e => onChange({...property, bedrooms: Number(e.target.value)})} />
-            </div>
-            <div>
-               <label className="block text-sm font-medium mb-1 text-main">Banheiros</label>
-               <input type="number" className="w-full p-2 border rounded-lg bg-white text-main" value={property.bathrooms || ''} onChange={e => onChange({...property, bathrooms: Number(e.target.value)})} />
-            </div>
-            <div>
-               <label className="block text-sm font-medium mb-1 text-main">Área (m²)</label>
-               <input type="number" className="w-full p-2 border rounded-lg bg-white text-main" value={property.area || ''} onChange={e => onChange({...property, area: Number(e.target.value)})} />
-            </div>
-         </div>
-
-         <div className="col-span-2">
-            <label className="block text-sm font-medium mb-1 text-main">Características</label>
-            <div className="flex gap-2 mb-2">
-              <input 
-                className="flex-1 p-2 border rounded-lg bg-white text-main"
-                placeholder="Adicionar característica (ex: Vista Mar)"
-                value={tempFeature}
-                onChange={e => setTempFeature(e.target.value)}
-                onKeyPress={e => {
-                  if (e.key === 'Enter' && tempFeature) {
-                    onChange({ ...property, features: [...(property.features || []), tempFeature] });
-                    setTempFeature('');
-                  }
-                }}
-              />
-              <button 
-                onClick={() => {
-                  if (tempFeature) {
-                    onChange({ ...property, features: [...(property.features || []), tempFeature] });
-                    setTempFeature('');
-                  }
-                }}
-                className="bg-gray-200 text-gray-800 px-4 rounded-lg hover:bg-gray-300"
-              >
-                Add
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-               {property.features?.map((f, i) => (
-                 <span key={i} className="bg-ocean-50 text-ocean-700 px-2 py-1 rounded-full text-sm flex items-center gap-1">
-                   {f} <X size={12} className="cursor-pointer" onClick={() => onChange({ ...property, features: property.features?.filter((_, idx) => idx !== i) })} />
-                 </span>
-               ))}
-            </div>
-         </div>
-
-         <div className="col-span-2">
-            <div className="flex justify-between items-center mb-1">
-              <label className="block text-sm font-medium text-main">Descrição</label>
-              <button 
-                onClick={handleGenerateDescription}
-                disabled={isGeneratingAI}
-                className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full flex items-center gap-1 hover:bg-purple-200 disabled:opacity-50"
-              >
-                <Sparkles size={12} /> {isGeneratingAI ? 'Gerando...' : 'Gerar com IA'}
-              </button>
-            </div>
-            <textarea 
-              className="w-full p-2 border rounded-lg h-32 bg-white text-main"
-              value={property.description || ''}
-              onChange={e => onChange({...property, description: e.target.value})}
-            />
-         </div>
-
-         <div className="col-span-2">
-            <label className="block text-sm font-medium mb-1 text-main">Fotos</label>
-            <div className="grid grid-cols-4 gap-4 mb-2">
-               {property.images?.map((img, i) => (
-                 <div key={i} className="relative h-24 rounded-lg overflow-hidden group bg-gray-100">
-                    <img src={img} className="w-full h-full object-cover" alt="preview" />
-                    <button 
-                      onClick={() => onChange({ ...property, images: property.images?.filter((_, idx) => idx !== i) })}
-                      className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                    >
-                      <X size={12} />
-                    </button>
-                 </div>
-               ))}
-               <label className="h-24 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center text-muted cursor-pointer hover:border-ocean-500 hover:text-ocean-500 transition bg-gray-50">
-                 <Camera size={24} />
-                 <span className="text-xs mt-1">Adicionar Foto</span>
-                 <input type="file" className="hidden" accept="image/*" multiple onChange={handleImageUpload} />
-               </label>
-            </div>
-         </div>
-       </div>
-
-       <div className="mt-8 flex justify-end gap-4">
-          <button onClick={onCancel} className="px-6 py-2 border rounded-lg hover:bg-gray-50 text-main">Cancelar</button>
-          <button 
-            disabled={isLoading}
-            onClick={() => {
-                if (!property.title || !property.price) {
-                  alert("Título e Preço são obrigatórios");
-                  return;
-                }
-                onSave({
-                  ...property,
-                  images: property.images || [],
-                  features: property.features || [],
-                  views: property.views || 0
-                });
-            }} 
-            className="px-6 py-2 bg-ocean-600 text-white rounded-lg hover:bg-ocean-700 disabled:opacity-50"
-          >
-            {isLoading ? 'Salvando...' : 'Salvar Imóvel'}
-          </button>
-       </div>
-    </div>
-  );
-};
-
-const AdminSettings: React.FC<{
-  settings: SiteSettings;
-  onSave: (s: SiteSettings) => void;
-}> = ({ settings, onSave }) => {
-  const [localSettings, setLocalSettings] = useState(settings);
-  
-  const changeTheme = (theme: ThemeOption) => {
-    setLocalSettings(prev => ({...prev, primaryColor: theme}));
-    document.body.className = `bg-page text-main transition-colors duration-300 theme-${theme}`;
-  };
-
-  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      try {
-        const base64 = await fileToBase64(e.target.files[0]);
-        setLocalSettings(prev => ({...prev, logoUrl: base64}));
-      } catch (error) {
-        console.error("Error uploading logo", error);
-      }
-    }
-  };
-
-  return (
-    <div className="bg-card rounded-xl shadow-sm border border-ocean-100 p-6 max-w-2xl mx-auto">
-       <h2 className="text-xl font-bold mb-6 text-main">Configurações do Site</h2>
-       
-       <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div>
-               <label className="block text-sm font-medium mb-1 text-main">Nome do Site</label>
-               <input 
-                  className="w-full p-2 border rounded-lg bg-white text-main"
-                  value={localSettings.siteName}
-                  onChange={e => setLocalSettings({...localSettings, siteName: e.target.value})}
-               />
-             </div>
-             <div>
-               <label className="block text-sm font-medium mb-1 text-main">Logo</label>
-               <div className="flex gap-2">
-                  {localSettings.logoUrl && <img src={localSettings.logoUrl} className="h-10 w-10 object-contain bg-gray-100 rounded" />}
-                  <label className="flex-1 cursor-pointer bg-gray-100 hover:bg-gray-200 text-muted border rounded-lg flex items-center justify-center gap-2 p-2 text-sm">
-                     <Upload size={16} /> Upload
-                     <input type="file" className="hidden" accept="image/*" onChange={handleLogoUpload} />
-                  </label>
-               </div>
-             </div>
-          </div>
-
-          <div>
-             <label className="block text-sm font-medium mb-2 text-main">Cores do Tema</label>
-             <div className="flex flex-wrap gap-3">
-                <button 
-                   onClick={() => changeTheme('ocean')}
-                   className={`px-4 py-2 rounded-full border flex items-center gap-2 ${localSettings.primaryColor === 'ocean' ? 'ring-2 ring-ocean-500 border-transparent' : 'hover:bg-gray-50'}`}
-                >
-                   <div className="w-4 h-4 rounded-full bg-[#0ea5e9]"></div> Ocean
-                </button>
-                <button 
-                   onClick={() => changeTheme('nature')}
-                   className={`px-4 py-2 rounded-full border flex items-center gap-2 ${localSettings.primaryColor === 'nature' ? 'ring-2 ring-green-500 border-transparent' : 'hover:bg-gray-50'}`}
-                >
-                   <div className="w-4 h-4 rounded-full bg-[#22c55e]"></div> Nature
-                </button>
-                 <button 
-                   onClick={() => changeTheme('sunset')}
-                   className={`px-4 py-2 rounded-full border flex items-center gap-2 ${localSettings.primaryColor === 'sunset' ? 'ring-2 ring-red-500 border-transparent' : 'hover:bg-gray-50'}`}
-                >
-                   <div className="w-4 h-4 rounded-full bg-[#ef4444]"></div> Vermelho
-                </button>
-                <button 
-                   onClick={() => changeTheme('dark')}
-                   className={`px-4 py-2 rounded-full border flex items-center gap-2 ${localSettings.primaryColor === 'dark' ? 'ring-2 ring-gray-500 border-transparent' : 'hover:bg-gray-50'}`}
-                >
-                   <div className="w-4 h-4 rounded-full bg-[#64748b]"></div> Cinza/Preto
-                </button>
-             </div>
-          </div>
-
-          <div className="border-t border-ocean-100 pt-4">
-            <h3 className="font-semibold mb-4 text-main">Contato</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               <div>
-                  <label className="block text-sm font-medium mb-1 text-main">Telefone Principal</label>
-                  <input 
-                    className="w-full p-2 border rounded-lg bg-white text-main"
-                    value={localSettings.contact.phone}
-                    onChange={e => setLocalSettings({...localSettings, contact: {...localSettings.contact, phone: maskPhone(e.target.value)}})}
-                  />
-               </div>
-               <div>
-                  <label className="block text-sm font-medium mb-1 text-main">WhatsApp Reservas</label>
-                  <input 
-                    className="w-full p-2 border rounded-lg bg-white text-main"
-                    value={localSettings.contact.bookingPhone || ''}
-                    onChange={e => setLocalSettings({...localSettings, contact: {...localSettings.contact, bookingPhone: maskPhone(e.target.value)}})}
-                  />
-               </div>
-            </div>
-            <div className="mt-4">
-               <label className="block text-sm font-medium mb-1 text-main">Email</label>
-               <input 
-                  className="w-full p-2 border rounded-lg bg-white text-main"
-                  value={localSettings.contact.email}
-                  onChange={e => setLocalSettings({...localSettings, contact: {...localSettings.contact, email: e.target.value}})}
-               />
-            </div>
-             <div className="mt-4">
-               <label className="block text-sm font-medium mb-1 text-main">Horário de Atendimento</label>
-               <input 
-                  className="w-full p-2 border rounded-lg bg-white text-main"
-                  value={localSettings.contact.hours}
-                  onChange={e => setLocalSettings({...localSettings, contact: {...localSettings.contact, hours: e.target.value}})}
-               />
-            </div>
-            <div className="mt-4">
-               <label className="block text-sm font-medium mb-1 text-main">Endereço</label>
-               <input 
-                  className="w-full p-2 border rounded-lg bg-white text-main"
-                  value={localSettings.contact.address}
-                  onChange={e => setLocalSettings({...localSettings, contact: {...localSettings.contact, address: e.target.value}})}
-               />
-            </div>
-          </div>
-          
-          <div className="pt-4 border-t border-ocean-100">
-             <button 
-               onClick={() => onSave(localSettings)}
-               className="w-full bg-ocean-600 text-white py-3 rounded-lg hover:bg-ocean-700 font-bold"
-             >
-               Salvar Alterações
-             </button>
-          </div>
-       </div>
-    </div>
-  );
-};
-
-const AdminProperties: React.FC<{
-  properties: Property[];
-  onEdit: (p: Property) => void;
-  onDelete: (id: string) => void;
-  onNew: () => void;
-  onSeed: () => void; 
-  isLoading: boolean;
-}> = ({ properties, onEdit, onDelete, onNew, onSeed, isLoading }) => {
-  return (
-    <div className="bg-card rounded-xl shadow-sm border border-ocean-100 p-6">
-       <div className="flex justify-between items-center mb-6">
-         <h2 className="text-xl font-bold text-main">Imóveis Cadastrados ({properties.length})</h2>
-         <div className="flex gap-2">
-             <button 
-                onClick={onSeed}
-                disabled={isLoading}
-                className="bg-purple-100 text-purple-700 px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-purple-200 disabled:opacity-50"
-                title="Preencher com imóveis de teste"
-             >
-                {isLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-700"></div> : <Database size={18} />} 
-                <span className="hidden md:inline">{isLoading ? 'Gerando...' : 'Gerar Teste'}</span>
-             </button>
-             <button 
-               onClick={onNew}
-               className="bg-ocean-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-ocean-700"
-             >
-               <Plus size={18} /> Novo
-             </button>
-         </div>
-       </div>
-
-       {isLoading ? (
-          <div className="text-center py-10 text-muted">Carregando imóveis...</div>
-       ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-ocean-100 bg-ocean-50">
-                  <th className="p-4 text-ocean-900">Imóvel</th>
-                  <th className="p-4 text-ocean-900">Tipo</th>
-                  <th className="p-4 text-ocean-900">Preço</th>
-                  <th className="p-4 text-right text-ocean-900">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {properties.map(prop => (
-                  <tr key={prop.id} className="border-b border-ocean-100 hover:bg-ocean-50/50">
-                    <td className="p-4 font-medium text-main">{prop.title}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs ${prop.type === 'sale' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'}`}>
-                        {prop.type === 'sale' ? 'Venda' : 'Temporada'}
-                      </span>
-                    </td>
-                    <td className="p-4 text-muted">R$ {prop.price.toLocaleString()}</td>
-                    <td className="p-4 text-right">
-                        <button 
-                          onClick={() => onEdit(prop)}
-                          className="text-blue-600 hover:text-blue-800 mx-2"
-                        >
-                          <Edit size={18} />
-                        </button>
-                        <button 
-                          onClick={() => onDelete(prop.id)}
-                          className="text-red-600 hover:text-red-800 mx-2"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-       )}
     </div>
   );
 };
@@ -927,415 +230,118 @@ const AppContent: React.FC = () => {
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SETTINGS);
   const [view, setView] = useState<ViewState>(ViewState.HOME);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [filterType, setFilterType] = useState<PropertyType | 'all'>('all');
-  const [searchTerm, setSearchTerm] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
   const [showDbSetup, setShowDbSetup] = useState(false);
-
-  // SAFETY TIMEOUT REF
   const loadingTimeoutRef = useRef<any>(null);
 
   useEffect(() => {
-    console.log("App Initializing... Vercel Update Check");
-    const savedSettings = localStorage.getItem('siteSettings');
-    if (savedSettings) {
-      setSettings(JSON.parse(savedSettings));
-    }
+    console.log("App V.2.0 Started");
+    const saved = localStorage.getItem('siteSettings');
+    if (saved) setSettings(JSON.parse(saved));
+    fetchProperties();
+    return () => { if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current); };
   }, []);
 
   useEffect(() => {
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
-    localStorage.setItem('siteSettings', JSON.stringify(settings));
-    setLogoFailed(false);
   }, [settings]);
 
-  // FETCH PROPERTIES WITH SAFETY TIMEOUT
   const fetchProperties = async () => {
-    console.log("Fetching properties...");
     setIsLoading(true);
     setDbError(null);
-
-    // Safety Timeout: If database hangs, unlock UI after 5 seconds
     if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
     loadingTimeoutRef.current = setTimeout(() => {
-        if (isLoading) {
-            setIsLoading(false);
-            setDbError("Tempo limite excedido. Verifique sua conexão ou tente recarregar.");
-        }
-    }, 5000);
-
-    try {
-        const { data, error } = await supabase
-          .from('properties')
-          .select('*')
-          .order('created_at', { ascending: false });
-        
-        // Clear timeout if successful
-        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-
-        if (error) {
-          console.error("Supabase Error:", error);
-          if (error.code === '42P01' || (error.message && error.message.includes('relation "properties" does not exist'))) {
-            setShowDbSetup(true);
-          } else {
-            // IMPROVED ERROR MESSAGE HANDLING
-            let errorMessage = "Erro desconhecido";
-            if (typeof error === 'object' && error !== null) {
-               if ('message' in error) errorMessage = (error as any).message;
-               else if ('error_description' in error) errorMessage = (error as any).error_description;
-               else errorMessage = JSON.stringify(error);
-            } else {
-               errorMessage = String(error);
-            }
-            setDbError(errorMessage);
-          }
-        } else if (data) {
-          console.log("Properties loaded:", data.length);
-          // Sanitize data to prevent crashes
-          const sanitizedData = data.map((p: any) => ({
-             ...p,
-             images: p.images || [],
-             features: p.features || []
-          }));
-          setProperties(sanitizedData as Property[]);
-          setShowDbSetup(false);
-        }
-    } catch (err: any) {
-        console.error("Critical Fetch Error:", err);
-        setDbError(err.message || "Falha na conexão com o banco de dados.");
-    }
-    setIsLoading(false);
-  };
-
-  useEffect(() => {
-    fetchProperties();
-    return () => {
-        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-    };
-  }, []);
-
-  const handlePropertyClick = (property: Property) => {
-    setSelectedProperty(property);
-    setView(ViewState.DETAILS);
-    window.scrollTo(0, 0);
-  };
-
-  const handleSaveProperty = async (propertyToSave: Partial<Property>) => {
-    setIsLoading(true);
-    try {
-        const payload = { ...propertyToSave };
-        if (!payload.id) {
-            delete payload.id;
-        }
-
-        const { error } = await supabase
-            .from('properties')
-            .upsert(payload);
-
-        if (error) {
-            const msg = (error as any).message || JSON.stringify(error);
-            alert('Erro ao salvar imóvel: ' + msg);
-        } else {
-            await fetchProperties();
-            setView(ViewState.ADMIN_PROPERTIES);
-            setEditingProperty({});
-        }
-    } catch (err: any) {
-        alert('Erro inesperado ao salvar: ' + err.message);
-    }
-    setIsLoading(false);
-  };
-
-  const handleDeleteProperty = async (id: string) => {
-    if (window.confirm("Tem certeza que deseja excluir este imóvel?")) {
-        const { error } = await supabase
-            .from('properties')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-             const msg = (error as any).message || JSON.stringify(error);
-             alert('Erro ao excluir: ' + msg);
-        } else {
-            fetchProperties();
-        }
-    }
-  };
-
-  const handleSeedDatabase = async () => {
-    if (window.confirm("Deseja inserir 4 imóveis de teste no banco de dados?")) {
-        setIsLoading(true);
-        const { error } = await supabase
-            .from('properties')
-            .insert(SAMPLE_PROPERTIES);
-        
-        if (error) {
-            const msg = error.message || JSON.stringify(error);
-            alert("Erro ao criar imóveis teste: " + msg + "\n\nDICA: Copie o código SQL na tela de configuração e rode no Supabase para corrigir as permissões.");
-            if (error.code === '42P01' || msg.includes('policy')) {
-                setShowDbSetup(true);
-            }
-        } else {
-            await fetchProperties();
-            alert("Imóveis de teste criados com sucesso!");
-        }
+      if (isLoading) {
         setIsLoading(false);
+        setDbError("O banco de dados demorou muito para responder. Verifique sua conexão.");
+      }
+    }, 8000);
+
+    try {
+      const { data, error } = await supabase.from('properties').select('*').order('created_at', { ascending: false });
+      if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+
+      if (error) {
+        if (error.code === '42P01' || error.message.includes('does not exist')) setShowDbSetup(true);
+        else setDbError(error.message || JSON.stringify(error));
+      } else if (data) {
+        setProperties(data.map((p: any) => ({ ...p, images: p.images || [], features: p.features || [] })));
+        setShowDbSetup(false);
+      }
+    } catch (err: any) {
+      setDbError(err.message || "Erro de conexão.");
     }
+    setIsLoading(false);
   };
 
-  const renderHome = () => {
-    const filteredProperties = properties.filter(p => {
-      const matchesType = filterType === 'all' || p.type === filterType;
-      const matchesSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            p.location.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesType && matchesSearch;
-    });
-    
-    return (
-      <div className="container mx-auto px-4 py-6">
-        {/* Error Banner */}
-        {dbError && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex flex-col gap-2 animate-pulse">
-                <div className="flex items-center gap-2">
-                   <AlertTriangle />
-                   <strong>Erro de Conexão:</strong>
-                </div>
-                <div className="text-xs font-mono bg-white/50 p-2 rounded overflow-auto whitespace-pre-wrap">
-                    {dbError}
-                </div>
-                {dbError.toLowerCase().includes("key") && (
-                  <div className="text-xs bg-white/50 p-2 rounded mt-1">
-                    <strong>Dica de Segurança:</strong> Se sua chave não for um JWT padrão (não começa com 'ey'), o cliente do Supabase pode falhar.
-                  </div>
-                )}
-                <button onClick={fetchProperties} className="self-end bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm font-bold mt-2">Tentar Novamente</button>
-            </div>
-        )}
-
-        {/* Compact Search & Filter Section */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8 bg-card p-4 rounded-xl border border-ocean-100 shadow-sm">
-           <div className="relative w-full md:w-96">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-ocean-400" size={20} />
-              <input
-                type="text"
-                placeholder="Buscar por localização..."
-                className="w-full pl-10 pr-4 py-2 rounded-full border border-ocean-300 bg-page text-main focus:outline-none focus:border-ocean-500 focus:ring-1 focus:ring-ocean-500 transition"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-           </div>
-
-           <div className="flex gap-2">
-              <button 
-                onClick={() => setFilterType('all')}
-                className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${filterType === 'all' ? 'bg-ocean-600 text-white' : 'bg-ocean-50 text-ocean-700 hover:bg-ocean-100'}`}
-              >
-                Todos
-              </button>
-              <button 
-                 onClick={() => setFilterType('sale')}
-                 className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${filterType === 'sale' ? 'bg-ocean-600 text-white' : 'bg-ocean-50 text-ocean-700 hover:bg-ocean-100'}`}
-              >
-                Venda
-              </button>
-              <button 
-                 onClick={() => setFilterType('rent_seasonal')}
-                 className={`px-4 py-1.5 rounded-full text-sm font-semibold transition ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white' : 'bg-ocean-50 text-ocean-700 hover:bg-ocean-100'}`}
-              >
-                Temporada
-              </button>
-           </div>
-        </div>
-
-        {/* Properties Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {filteredProperties.map(property => (
-            <PropertyCard key={property.id} property={property} onClick={handlePropertyClick} />
-          ))}
-          {filteredProperties.length === 0 && !isLoading && (
-            <div className="col-span-full text-center py-12 text-muted">
-               <div className="flex flex-col items-center">
-                 <Building2 size={48} className="text-ocean-200 mb-4" />
-                 <p className="text-lg">Nenhum imóvel encontrado.</p>
-                 {properties.length === 0 && (
-                   <p className="text-sm mt-2">Vá para a Área Administrativa para cadastrar ou gerar imóveis.</p>
-                 )}
-               </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+  const handleSeed = async () => {
+    setIsLoading(true);
+    const { error } = await supabase.from('properties').insert(SAMPLE_PROPERTIES);
+    if (error) {
+      alert("Erro ao criar dados: " + error.message);
+      if (error.code === '42P01') setShowDbSetup(true);
+    } else {
+      alert("Dados de teste criados!");
+      fetchProperties();
+    }
+    setIsLoading(false);
   };
 
-  const renderAdmin = () => (
-    <div className="container mx-auto px-4 py-4 md:py-8">
-      <div className="flex justify-between items-center mb-6">
-         <h1 className="text-2xl font-bold flex items-center gap-2 text-main">
-           <LayoutDashboard className="text-ocean-600" /> Painel Administrativo
-         </h1>
-         <button 
-           onClick={() => setView(ViewState.HOME)}
-           className="flex items-center text-muted hover:text-ocean-600"
-         >
-           <LogOut size={18} className="mr-2" /> Sair
-         </button>
-      </div>
-
-      <div className="flex gap-2 md:gap-4 mb-6 overflow-x-auto">
-        <button 
-          onClick={() => setView(ViewState.ADMIN_PROPERTIES)}
-          className={`flex-1 py-3 px-4 rounded-lg font-semibold whitespace-nowrap transition ${view === ViewState.ADMIN_PROPERTIES || view === ViewState.ADMIN_FORM ? 'bg-ocean-600 text-white' : 'bg-card border border-ocean-100 hover:bg-ocean-50 text-main'}`}
-        >
-          Gerenciar Imóveis
-        </button>
-        <button 
-          onClick={() => setView(ViewState.ADMIN_SETTINGS)}
-          className={`flex-1 py-3 px-4 rounded-lg font-semibold whitespace-nowrap transition ${view === ViewState.ADMIN_SETTINGS ? 'bg-ocean-600 text-white' : 'bg-card border border-ocean-100 hover:bg-ocean-50 text-main'}`}
-        >
-          Configurações
-        </button>
-      </div>
-
-      {view === ViewState.ADMIN_PROPERTIES && (
-        <AdminProperties 
-          properties={properties}
-          onEdit={(p) => { setEditingProperty(p); setView(ViewState.ADMIN_FORM); }}
-          onDelete={handleDeleteProperty}
-          onNew={() => { setEditingProperty({}); setView(ViewState.ADMIN_FORM); }}
-          onSeed={handleSeedDatabase}
-          isLoading={isLoading}
-        />
-      )}
-
-      {view === ViewState.ADMIN_FORM && (
-        <AdminForm 
-          property={editingProperty}
-          onSave={handleSaveProperty}
-          onCancel={() => setView(ViewState.ADMIN_PROPERTIES)}
-          onChange={setEditingProperty}
-          isLoading={isLoading}
-        />
-      )}
-      
-      {view === ViewState.ADMIN_SETTINGS && (
-        <AdminSettings 
-          settings={settings}
-          onSave={(s) => { setSettings(s); alert("Configurações salvas (Localmente)!"); }}
-        />
-      )}
-    </div>
-  );
-
-  if (showDbSetup) {
-    return <DatabaseSetup />;
-  }
+  if (showDbSetup) return <DatabaseSetup />;
 
   return (
     <div className="min-h-screen bg-page font-sans text-main">
-       <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100">
-         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-           <div 
-             className="flex items-center gap-3 text-ocean-600 font-bold text-xl cursor-pointer"
-             onClick={() => { setView(ViewState.HOME); setSelectedProperty(null); }}
-           >
-             {settings.logoUrl && !logoFailed ? (
-               <img 
-                  src={settings.logoUrl} 
-                  alt="Logo" 
-                  className="h-12 w-auto object-contain" 
-                  onError={() => setLogoFailed(true)}
-               />
-             ) : null}
-             
-             {(!settings.logoUrl || logoFailed) && (
-                <UbatubaLogo className="h-12 w-12" />
-             )}
-
-             <span className="text-ocean-800 hidden md:block">{settings.siteName}</span>
-           </div>
-
-           <div className="flex items-center gap-4">
-              <div className="hidden md:flex items-center text-sm text-muted gap-6 mr-4">
-                 <span className="flex items-center gap-1 hover:text-ocean-600"><Phone size={14} /> {settings.contact.phone}</span>
-                 <span className="flex items-center gap-1 hover:text-ocean-600"><Instagram size={14} /> {settings.social.instagram}</span>
-              </div>
-              <button 
-                onClick={() => setView(view === ViewState.HOME || view === ViewState.DETAILS ? ViewState.ADMIN_PROPERTIES : ViewState.HOME)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full hover:bg-ocean-50 transition border border-ocean-100 text-ocean-700"
-              >
-                 {view === ViewState.HOME || view === ViewState.DETAILS ? (
-                   <>
-                     <UserCircle size={20} />
-                     <span className="hidden sm:inline">Área Administrativa</span>
-                   </>
-                 ) : (
-                   <>
-                     <LogOut size={20} />
-                     <span className="hidden sm:inline">Sair</span>
-                   </>
-                 )}
-              </button>
-           </div>
+      <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100 h-16 flex items-center justify-between px-4">
+         <div className="flex items-center gap-3 font-bold text-xl cursor-pointer" onClick={() => setView(ViewState.HOME)}>
+            {settings.logoUrl && !logoFailed ? (
+               <img src={settings.logoUrl} className="h-12 w-auto" onError={() => setLogoFailed(true)} />
+            ) : <UbatubaLogo className="h-12 w-12" />}
+            <span className="hidden md:block text-ocean-800">{settings.siteName}</span>
          </div>
-       </header>
+         <button onClick={() => setView(view === ViewState.HOME ? ViewState.ADMIN_PROPERTIES : ViewState.HOME)} className="px-4 py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-2 text-sm font-medium">
+            <UserCircle size={18}/> {view === ViewState.HOME ? "Área Admin" : "Voltar ao Site"}
+         </button>
+      </header>
 
-       <main>
-          {(view === ViewState.HOME) && renderHome()}
-          {(view === ViewState.DETAILS && selectedProperty) && (
-             <PropertyDetails 
-                property={selectedProperty} 
-                onBack={() => setView(ViewState.HOME)} 
-                bookingPhone={settings.contact.bookingPhone || settings.contact.phone}
-             />
-          )}
-          {(view === ViewState.ADMIN_PROPERTIES || view === ViewState.ADMIN_FORM || view === ViewState.ADMIN_SETTINGS) && renderAdmin()}
-       </main>
-
-       <footer className="bg-ocean-900 text-white py-12 mt-12">
-          <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
-             <div>
-               <div className="flex items-center gap-2 font-bold text-xl mb-4 text-white">
-                 <UbatubaLogo className="h-8 w-8 text-white" /> {settings.siteName}
-               </div>
-               <p className="text-sm mb-4 text-ocean-200">
-                 Especialistas em imóveis no litoral norte de São Paulo. 
-                 Encontre a casa dos seus sonhos ou o refúgio perfeito para suas férias.
-               </p>
-             </div>
-             <div>
-               <h4 className="text-white font-bold mb-4">Contato</h4>
-               <ul className="space-y-2 text-sm text-ocean-100">
-                 <li className="flex items-center gap-2"><MapPin size={16} /> {settings.contact.address}</li>
-                 <li className="flex items-center gap-2"><Phone size={16} /> {settings.contact.phone}</li>
-                 <li className="flex items-center gap-2"><Mail size={16} /> {settings.contact.email}</li>
-                 <li className="flex items-center gap-2"><Clock size={16} /> {settings.contact.hours}</li>
-               </ul>
-             </div>
-             <div>
-               <h4 className="text-white font-bold mb-4">Redes Sociais</h4>
-               <div className="flex gap-4 text-white">
-                 <a href="#" className="hover:text-ocean-200 transition"><Instagram /></a>
-                 <a href="#" className="hover:text-ocean-200 transition"><Facebook /></a>
-               </div>
+      <main>
+        {dbError && (
+          <div className="container mx-auto p-4 mt-4">
+             <div className="bg-red-100 text-red-800 p-4 rounded border border-red-200 flex justify-between items-center">
+                <span><strong>Erro:</strong> {dbError}</span>
+                <button onClick={fetchProperties} className="bg-red-200 px-3 py-1 rounded hover:bg-red-300 text-sm font-bold">Tentar Novamente</button>
              </div>
           </div>
-          <div className="container mx-auto px-4 mt-8 pt-8 border-t border-ocean-800 text-center text-xs text-ocean-300">
-             &copy; 2024 {settings.siteName}. Todos os direitos reservados.
+        )}
+
+        {view === ViewState.HOME && (
+          <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {properties.map(p => <PropertyCard key={p.id} property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />)}
+            {properties.length === 0 && !isLoading && !dbError && (
+               <div className="col-span-full text-center py-12 text-muted">
+                  <p>Nenhum imóvel encontrado.</p>
+                  <p className="text-sm mt-2">Vá para a Área Admin para gerar dados.</p>
+               </div>
+            )}
           </div>
-       </footer>
+        )}
+        {view === ViewState.DETAILS && selectedProperty && <PropertyDetails property={selectedProperty} onBack={() => setView(ViewState.HOME)} bookingPhone={settings.contact.bookingPhone || settings.contact.phone} />}
+        {view === ViewState.ADMIN_PROPERTIES && (
+           <div className="container mx-auto p-4">
+              <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold">Admin</h1>
+                <button onClick={handleSeed} className="bg-purple-100 text-purple-700 px-4 py-2 rounded hover:bg-purple-200 flex items-center gap-2"><Database size={18}/> Gerar Teste</button>
+              </div>
+              <div className="bg-white p-6 rounded shadow text-center text-muted">
+                <p>Funcionalidade Admin Simplificada para Debug.</p>
+                <p>Use o botão "Gerar Teste" para popular o banco.</p>
+              </div>
+           </div>
+        )}
+      </main>
     </div>
   );
 };
 
-const App: React.FC = () => {
-  return (
-    <ErrorBoundary>
-      <AppContent />
-    </ErrorBoundary>
-  );
-};
-
+const App: React.FC = () => <ErrorBoundary><AppContent /></ErrorBoundary>;
 export default App;

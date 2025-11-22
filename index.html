@@ -27,7 +27,7 @@
         --text-muted: #6b7280;
       }
 
-      /* Dynamic Theme Classes applied to body or root */
+      /* Dynamic Theme Classes */
       .theme-nature {
         --color-primary-50: #f0fdf4;
         --color-primary-100: #dcfce7;
@@ -39,13 +39,11 @@
         --color-primary-700: #15803d;
         --color-primary-800: #166534;
         --color-primary-900: #14532d;
-        
         --color-sand-100: #fefce8;
         --color-sand-200: #fef9c3;
       }
 
       .theme-sunset {
-        /* Red Theme */
         --color-primary-50: #fef2f2;
         --color-primary-100: #fee2e2;
         --color-primary-200: #fecaca;
@@ -56,13 +54,11 @@
         --color-primary-700: #b91c1c;
         --color-primary-800: #991b1b;
         --color-primary-900: #7f1d1d;
-
         --color-sand-100: #fff1f2;
         --color-sand-200: #ffe4e6;
       }
 
       .theme-dark {
-        /* Grayscale / Black Theme on Light Background */
         --color-primary-50: #f8fafc;
         --color-primary-100: #f1f5f9;
         --color-primary-200: #e2e8f0;
@@ -73,32 +69,36 @@
         --color-primary-700: #334155;
         --color-primary-800: #1e293b;
         --color-primary-900: #0f172a; 
-
         --color-sand-100: #f3f4f6;
         --color-sand-200: #e5e7eb;
-        
-        /* Keep background light */
         --bg-body: #f9fafb;
         --bg-card: #ffffff;
         --text-main: #000000;
         --text-muted: #4b5563;
       }
       
-      /* Initial Loading State - HTML based */
       #loading-screen {
         display: flex;
+        flex-direction: column;
         justify-content: center;
         align-items: center;
         height: 100vh;
         width: 100vw;
         font-family: sans-serif;
         color: #6b7280;
-        font-size: 1.2rem;
         position: fixed;
         top: 0;
         left: 0;
         background: white;
         z-index: 9999;
+      }
+      #error-display {
+        display: none;
+        padding: 20px;
+        color: #dc2626;
+        font-family: sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
       }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -110,9 +110,9 @@
               ocean: {
                 50: 'var(--color-primary-50)',
                 100: 'var(--color-primary-100)',
-                200: 'var(--color-primary-200)', // Added
-                300: 'var(--color-primary-300)', // Added
-                400: 'var(--color-primary-400)', // Added
+                200: 'var(--color-primary-200)',
+                300: 'var(--color-primary-300)',
+                400: 'var(--color-primary-400)',
                 500: 'var(--color-primary-500)',
                 600: 'var(--color-primary-600)',
                 700: 'var(--color-primary-700)',
@@ -123,7 +123,6 @@
                 100: 'var(--color-sand-100)',
                 200: 'var(--color-sand-200)',
               },
-              // Custom semantic colors for Dark Mode compatibility
               page: 'var(--bg-body)',
               card: 'var(--bg-card)',
               main: 'var(--text-main)',
@@ -148,9 +147,30 @@
 </script>
 </head>
   <body class="bg-page text-main transition-colors duration-300">
-    <div id="loading-screen">Carregando Sistema...</div>
+    <div id="loading-screen">
+      <h2 style="font-size: 1.5rem; margin-bottom: 10px;">Iniciando App...</h2>
+      <p>Aguarde um momento.</p>
+    </div>
+    <div id="error-display"></div>
     <div id="root"></div>
+    
+    <!-- GLOBAL ERROR HANDLER: Captura erros que travam o site antes do React -->
     <script>
+      window.addEventListener('error', function(event) {
+        const loader = document.getElementById('loading-screen');
+        const errorDiv = document.getElementById('error-display');
+        if (loader) loader.style.display = 'none';
+        if (errorDiv) {
+          errorDiv.style.display = 'block';
+          errorDiv.innerHTML = `
+            <h1 style="font-size: 24px; margin-bottom: 10px;">Erro Fatal</h1>
+            <p>O site não conseguiu iniciar.</p>
+            <pre style="background:#f3f4f6; padding:15px; border-radius:8px; overflow:auto; margin-top:10px;">${event.message}</pre>
+            <p style="margin-top:10px; font-size: 0.9rem; color: #666;">Isso geralmente ocorre por erro de sintaxe em um arquivo.</p>
+          `;
+        }
+      });
+
       // Remove loader when React mounts
       window.addEventListener('load', () => {
         const observer = new MutationObserver((mutations) => {

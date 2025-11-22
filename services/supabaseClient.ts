@@ -1,20 +1,17 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// --- ATUALIZAÇÃO VERCEL FIX ---
+// --- CONFIGURAÇÃO BLINDADA ---
 // URL do projeto
 const SUPABASE_URL = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
 
-// CHAVE PÚBLICA (ANON)
-// Inserida diretamente para garantir funcionamento no Vercel
+// CHAVE PÚBLICA (ANON) CORRETA
 const VALID_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZudXZmdmZrc25hdGV6cnB4cWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3ODY5NDMsImV4cCI6MjA3OTM2Mjk0M30.Zut19NVh5Fho6E_9PIiyC_tO9hOyszhiQg0LMhaubuA';
 
 let supabaseInstance: SupabaseClient;
 
-// Função para criar um cliente falso caso algo grave aconteça (evita tela branca)
+// Função Mock para evitar crash (Tela Branca)
 const createMockClient = (errorMessage: string) => {
   console.error("Ativando Mock Client devido a erro:", errorMessage);
-  
-  // Mock chainable builder para evitar crash de .select() is not a function
   const mockBuilder = {
     select: () => mockBuilder,
     order: () => mockBuilder,
@@ -29,7 +26,7 @@ const createMockClient = (errorMessage: string) => {
       error: { 
         message: errorMessage,
         code: "CONNECTION_ERROR",
-        details: "Verifique o console para mais detalhes. (Chave ou URL inválida)"
+        details: "Falha crítica na inicialização do cliente."
       } 
     })
   };
@@ -44,17 +41,12 @@ const createMockClient = (errorMessage: string) => {
 };
 
 try {
-  // Tenta criar o cliente com a chave fixa correta
-  if (!VALID_KEY || !VALID_KEY.startsWith('ey')) {
-     throw new Error("Formato de chave inválido (deve começar com 'ey').");
-  }
-  
-  // O trim() remove espaços em branco acidentais na cópia
+  // Inicialização segura
   supabaseInstance = createClient(SUPABASE_URL, VALID_KEY.trim());
-  console.log("Supabase: Cliente iniciado com sucesso (Versão Blindada).");
+  console.log("Supabase: Cliente iniciado.");
 } catch (error: any) {
-  console.error("Supabase: Erro fatal na inicialização:", error);
-  supabaseInstance = createMockClient(error.message || "Erro desconhecido na inicialização");
+  console.error("Supabase: Erro fatal:", error);
+  supabaseInstance = createMockClient(error.message || "Erro desconhecido");
 }
 
 export const supabase = supabaseInstance;

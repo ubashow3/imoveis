@@ -1,14 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Chave fornecida anteriormente. 
-// Usamos hardcoded aqui para evitar que o acesso a 'process.env' quebre o site em navegadores que não suportam Node globals.
-const STATIC_KEY = 'vck_8atV0OJb2gOSbjgKRYWVMzP2kax3bjusce7ZpWyqf9a5Mg267d09b0aU';
-
-const getApiKey = () => {
-  // Retorna a chave estática segura
-  return STATIC_KEY;
-};
-
 export const generatePropertyDescription = async (
   features: string[],
   location: string,
@@ -16,14 +7,7 @@ export const generatePropertyDescription = async (
   bedrooms: number
 ): Promise<string> => {
   try {
-    const apiKey = getApiKey();
-    
-    if (!apiKey) {
-      return "Chave de API da IA não configurada.";
-    }
-
-    // Initialize AI only when needed
-    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
       Atue como um corretor de imóveis experiente especializado em imóveis de luxo no litoral.
