@@ -44,7 +44,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 
-// --- ERROR BOUNDARY COMPONENT (PREVENTS WHITE SCREEN) ---
+// --- ERROR BOUNDARY COMPONENT ---
 interface ErrorBoundaryProps {
   children?: React.ReactNode;
 }
@@ -56,12 +56,12 @@ interface ErrorBoundaryState {
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
   public state: ErrorBoundaryState;
-  readonly props: ErrorBoundaryProps;
+  public props: ErrorBoundaryProps;
 
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.props = props;
     this.state = { hasError: false, error: null };
+    this.props = props;
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
@@ -145,7 +145,7 @@ alter table properties enable row level security;
 drop policy if exists "Public Access" on properties;
 create policy "Public Access" on properties for all using (true) with check (true);`;
 
-// --- SAMPLE DATA FOR SEEDING ---
+// --- SAMPLE DATA ---
 const SAMPLE_PROPERTIES = [
   {
     title: "Casa de Alto Padrão em Itamambuca",
@@ -308,12 +308,16 @@ const PropertyDetails: React.FC<{
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
 
+  const images = property.images && property.images.length > 0 
+    ? property.images 
+    : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
+
   const nextImage = () => {
-    setCurrentImageIndex((prev) => (prev + 1) % property.images.length);
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
   };
 
   const prevImage = () => {
-    setCurrentImageIndex((prev) => (prev - 1 + property.images.length) % property.images.length);
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
   const calculateTotal = () => {
@@ -349,16 +353,15 @@ const PropertyDetails: React.FC<{
         <ArrowLeft size={20} className="mr-2" /> Voltar
       </button>
 
-      {/* Carousel / Slider */}
+      {/* Carousel */}
       <div className="relative h-[300px] md:h-[500px] bg-gray-100 rounded-2xl overflow-hidden mb-8 group">
         <img 
-          src={property.images[currentImageIndex] || 'https://via.placeholder.com/800x600'} 
+          src={images[currentImageIndex]} 
           alt={property.title} 
           className="w-full h-full object-cover transition-opacity duration-300"
         />
         
-        {/* Navigation Buttons */}
-        {property.images.length > 1 && (
+        {images.length > 1 && (
           <>
             <button 
               onClick={(e) => { e.stopPropagation(); prevImage(); }}
@@ -372,17 +375,14 @@ const PropertyDetails: React.FC<{
             >
               <ChevronRight size={24} />
             </button>
+            <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">
+              {currentImageIndex + 1} / {images.length}
+            </div>
           </>
         )}
-
-        {/* Counter Badge */}
-        <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm backdrop-blur-sm">
-          {currentImageIndex + 1} / {property.images.length}
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Main Info */}
         <div className="lg:col-span-2">
           <div className="mb-6">
             <span className="text-ocean-600 font-bold text-sm uppercase tracking-wider">
@@ -426,7 +426,7 @@ const PropertyDetails: React.FC<{
           <div className="mb-8">
             <h3 className="text-lg font-bold text-main mb-3">O que este lugar oferece</h3>
             <div className="flex flex-wrap gap-2">
-              {property.features.map((feature, idx) => (
+              {property.features?.map((feature, idx) => (
                 <span key={idx} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center">
                   <CheckCircle size={14} className="mr-1" /> {feature}
                 </span>
@@ -435,7 +435,6 @@ const PropertyDetails: React.FC<{
           </div>
         </div>
 
-        {/* Booking / Contact Widget */}
         <div className="lg:col-span-1">
            <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-lg sticky top-24">
               <div className="mb-6">
@@ -711,7 +710,6 @@ const AdminSettings: React.FC<{
 }> = ({ settings, onSave }) => {
   const [localSettings, setLocalSettings] = useState(settings);
   
-  // Update CSS vars when theme changes in preview
   const changeTheme = (theme: ThemeOption) => {
     setLocalSettings(prev => ({...prev, primaryColor: theme}));
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${theme}`;
@@ -921,8 +919,6 @@ const AdminProperties: React.FC<{
   );
 };
 
-// --- MAIN APP CONTENT ---
-
 const AppContent: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -933,12 +929,11 @@ const AppContent: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [dbError, setDbError] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  
-  // Admin State
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
   const [showDbSetup, setShowDbSetup] = useState(false);
 
   useEffect(() => {
+    console.log("App Initializing...");
     const savedSettings = localStorage.getItem('siteSettings');
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
@@ -951,8 +946,9 @@ const AppContent: React.FC = () => {
     setLogoFailed(false);
   }, [settings]);
 
-  // FETCH PROPERTIES FROM SUPABASE
+  // FETCH PROPERTIES
   const fetchProperties = async () => {
+    console.log("Fetching properties...");
     setIsLoading(true);
     setDbError(null);
     try {
@@ -962,14 +958,30 @@ const AppContent: React.FC = () => {
           .order('created_at', { ascending: false });
         
         if (error) {
-          // Check if table missing (Postgres code 42P01) or specific message
-          if (error.code === '42P01' || error.message.includes('relation "properties" does not exist')) {
+          console.error("Supabase Error:", error);
+          if (error.code === '42P01' || error.message?.includes('relation "properties" does not exist')) {
             setShowDbSetup(true);
           } else {
-            setDbError(error.message);
+            // IMPROVED ERROR MESSAGE HANDLING
+            let errorMessage = "Erro desconhecido";
+            if (typeof error === 'object' && error !== null) {
+               if ('message' in error) errorMessage = (error as any).message;
+               else if ('error_description' in error) errorMessage = (error as any).error_description;
+               else errorMessage = JSON.stringify(error);
+            } else {
+               errorMessage = String(error);
+            }
+            setDbError(errorMessage);
           }
         } else if (data) {
-          setProperties(data as Property[]);
+          console.log("Properties loaded:", data.length);
+          // Sanitize data to prevent crashes
+          const sanitizedData = data.map((p: any) => ({
+             ...p,
+             images: p.images || [],
+             features: p.features || []
+          }));
+          setProperties(sanitizedData as Property[]);
           setShowDbSetup(false);
         }
     } catch (err: any) {
@@ -1002,7 +1014,8 @@ const AppContent: React.FC = () => {
             .upsert(payload);
 
         if (error) {
-            alert('Erro ao salvar imóvel: ' + error.message);
+            const msg = (error as any).message || JSON.stringify(error);
+            alert('Erro ao salvar imóvel: ' + msg);
         } else {
             await fetchProperties();
             setView(ViewState.ADMIN_PROPERTIES);
@@ -1022,7 +1035,8 @@ const AppContent: React.FC = () => {
             .eq('id', id);
 
         if (error) {
-            alert('Erro ao excluir: ' + error.message);
+             const msg = (error as any).message || JSON.stringify(error);
+             alert('Erro ao excluir: ' + msg);
         } else {
             fetchProperties();
         }
@@ -1037,8 +1051,9 @@ const AppContent: React.FC = () => {
             .insert(SAMPLE_PROPERTIES);
         
         if (error) {
-            alert("Erro ao criar imóveis teste: " + error.message + "\n\nDICA: Copie o código SQL na tela de configuração e rode no Supabase para corrigir as permissões.");
-            if (error.code === '42P01' || error.message.includes('policy')) {
+            const msg = error.message || JSON.stringify(error);
+            alert("Erro ao criar imóveis teste: " + msg + "\n\nDICA: Copie o código SQL na tela de configuração e rode no Supabase para corrigir as permissões.");
+            if (error.code === '42P01' || msg.includes('policy')) {
                 setShowDbSetup(true);
             }
         } else {
@@ -1061,22 +1076,25 @@ const AppContent: React.FC = () => {
       <div className="container mx-auto px-4 py-6">
         {/* Error Banner */}
         {dbError && (
-            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex items-center gap-3 animate-pulse">
-                <AlertTriangle />
-                <div>
-                    <strong>Erro de Conexão:</strong> {dbError}
-                    <div className="text-xs mt-1">
-                       Dica: Se a chave do Supabase começa com 'sb_publishable', ela pode não ser compatível.
-                       Verifique se você tem a chave 'anon' que começa com 'ey...' no painel do Supabase.
-                    </div>
+            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex flex-col gap-2 animate-pulse">
+                <div className="flex items-center gap-2">
+                   <AlertTriangle />
+                   <strong>Erro de Conexão:</strong>
                 </div>
-                <button onClick={fetchProperties} className="ml-auto bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm">Tentar Novamente</button>
+                <div className="text-xs font-mono bg-white/50 p-2 rounded overflow-auto whitespace-pre-wrap">
+                    {dbError}
+                </div>
+                {dbError.toLowerCase().includes("key") && (
+                  <div className="text-xs bg-white/50 p-2 rounded mt-1">
+                    <strong>Dica de Segurança:</strong> Se sua chave não for um JWT padrão (não começa com 'ey'), o cliente do Supabase pode falhar.
+                  </div>
+                )}
+                <button onClick={fetchProperties} className="self-end bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm font-bold mt-2">Tentar Novamente</button>
             </div>
         )}
 
         {/* Compact Search & Filter Section */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8 bg-card p-4 rounded-xl border border-ocean-100 shadow-sm">
-           {/* Search Bar */}
            <div className="relative w-full md:w-96">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-ocean-400" size={20} />
               <input
@@ -1088,7 +1106,6 @@ const AppContent: React.FC = () => {
               />
            </div>
 
-           {/* Filter Pills */}
            <div className="flex gap-2">
               <button 
                 onClick={() => setFilterType('all')}
@@ -1146,7 +1163,6 @@ const AppContent: React.FC = () => {
          </button>
       </div>
 
-      {/* Admin Tabs (Desktop & Mobile) */}
       <div className="flex gap-2 md:gap-4 mb-6 overflow-x-auto">
         <button 
           onClick={() => setView(ViewState.ADMIN_PROPERTIES)}
@@ -1198,14 +1214,12 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-page font-sans text-main">
-       {/* Header Common */}
        <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100">
          <div className="container mx-auto px-4 h-16 flex items-center justify-between">
            <div 
              className="flex items-center gap-3 text-ocean-600 font-bold text-xl cursor-pointer"
              onClick={() => { setView(ViewState.HOME); setSelectedProperty(null); }}
            >
-             {/* Logo Logic: Show Image if valid, otherwise Show SVG */}
              {settings.logoUrl && !logoFailed ? (
                <img 
                   src={settings.logoUrl} 
@@ -1215,7 +1229,6 @@ const AppContent: React.FC = () => {
                />
              ) : null}
              
-             {/* Fallback to SVG if logo image fails or is unset */}
              {(!settings.logoUrl || logoFailed) && (
                 <UbatubaLogo className="h-12 w-12" />
              )}
@@ -1264,7 +1277,6 @@ const AppContent: React.FC = () => {
           <div className="container mx-auto px-4 grid grid-cols-1 md:grid-cols-3 gap-8">
              <div>
                <div className="flex items-center gap-2 font-bold text-xl mb-4 text-white">
-                 {/* Small logo in footer */}
                  <UbatubaLogo className="h-8 w-8 text-white" /> {settings.siteName}
                </div>
                <p className="text-sm mb-4 text-ocean-200">
@@ -1297,7 +1309,6 @@ const AppContent: React.FC = () => {
   );
 };
 
-// --- ROOT COMPONENT WITH ERROR BOUNDARY ---
 const App: React.FC = () => {
   return (
     <ErrorBoundary>

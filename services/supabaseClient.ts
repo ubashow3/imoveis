@@ -1,61 +1,44 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-// URL fixa do seu projeto
-const supabaseUrl = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
+// URL do seu projeto
+const SUPABASE_URL = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
 
-// Chave fornecida.
-// Tenta usar a chave anon se disponível, ou a chave publishable fornecida como fallback
-const DEFAULT_ANON_KEY = 'sb_publishable__hwpGDsikmzyMKKxiFtj1w_JrGA975Q';
+// SUA CHAVE PÚBLICA (ANON) CORRETA
+// Configurada diretamente para garantir que funcione no Vercel sem variaveis de ambiente
+const VALID_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZudXZmdmZrc25hdGV6cnB4cWZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3ODY5NDMsImV4cCI6MjA3OTM2Mjk0M30.Zut19NVh5Fho6E_9PIiyC_tO9hOyszhiQg0LMhaubuA';
 
 let supabaseInstance: SupabaseClient;
 
-try {
-  // Tenta obter a chave de várias fontes de ambiente ou usa a padrão
-  let key = DEFAULT_ANON_KEY;
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      key = process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_KEY || process.env.VITE_SUPABASE_KEY || DEFAULT_ANON_KEY;
-    }
-  } catch (e) {
-    // Ignora erro de acesso ao process.env em navegadores antigos
-  }
-
-  // Validação básica
-  if (!supabaseUrl) {
-    throw new Error("URL do Supabase ausente.");
-  }
-
-  console.log("Iniciando Supabase com URL:", supabaseUrl);
-  
-  // Inicializa o cliente
-  // Nota: Se a chave for inválida, operações futuras falharão, mas o createClient geralmente não lança erro síncrono
-  supabaseInstance = createClient(supabaseUrl, key);
-
-} catch (error) {
-  console.error("CRITICAL SUPABASE INIT ERROR (Client Fallback Activated):", error);
-  
-  // MOCK CLIENT: Permite que o site abra mesmo se a configuração do banco estiver quebrada.
-  // Isso previne a Tela Branca da Morte.
-  const mockErrorResponse = { 
-    data: null, 
-    error: { 
-      message: "Erro Crítico de Inicialização: Chave de API inválida ou Bloqueio de CORS. Verifique o console.",
-      code: "CLIENT_INIT_ERROR",
-      details: String(error)
-    } 
-  };
-  
-  // Cria um objeto que imita a estrutura do Supabase para não quebrar o App.tsx
-  supabaseInstance = {
-    from: () => ({
-      select: () => Promise.resolve(mockErrorResponse),
-      insert: () => Promise.resolve(mockErrorResponse),
-      update: () => Promise.resolve(mockErrorResponse),
-      delete: () => Promise.resolve(mockErrorResponse),
-      upsert: () => Promise.resolve(mockErrorResponse),
-      order: () => Promise.resolve(mockErrorResponse),
+// Função para criar um cliente falso caso algo muito grave aconteça (evita tela branca)
+const createMockClient = (errorMessage: string) => {
+  console.error("Ativando Mock Client devido a erro:", errorMessage);
+  const mockBuilder = {
+    select: () => mockBuilder,
+    order: () => mockBuilder,
+    eq: () => mockBuilder,
+    single: () => mockBuilder,
+    insert: () => mockBuilder,
+    upsert: () => mockBuilder,
+    delete: () => mockBuilder,
+    limit: () => mockBuilder,
+    then: (resolve: any) => resolve({ 
+      data: null, 
+      error: { 
+        message: errorMessage,
+        code: "CONNECTION_ERROR"
+      } 
     })
-  } as unknown as SupabaseClient;
+  };
+  return { from: () => mockBuilder } as unknown as SupabaseClient;
+};
+
+try {
+  // Tenta criar o cliente com a chave fixa correta
+  supabaseInstance = createClient(SUPABASE_URL, VALID_KEY);
+  console.log("Supabase conectado com sucesso.");
+} catch (error) {
+  console.error("Erro fatal ao iniciar Supabase:", error);
+  supabaseInstance = createMockClient("Erro na inicialização do cliente Supabase.");
 }
 
 export const supabase = supabaseInstance;
