@@ -178,6 +178,7 @@ const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
 
 const INITIAL_SETTINGS: SiteSettings = {
   siteName: 'Aluga-se Ubatuba',
+  logoUrl: '/img/LOGO_LEGAL.png', // Updated based on user request
   primaryColor: 'ocean',
   contact: {
     address: 'Av. Leovigildo Dias Vieira, 1000 - Itaguá',
