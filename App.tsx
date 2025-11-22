@@ -45,6 +45,64 @@ import {
   RefreshCw
 } from 'lucide-react';
 
+// --- ERROR BOUNDARY COMPONENT (PREVENTS WHITE SCREEN) ---
+interface ErrorBoundaryProps {
+  children?: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState;
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("CRITICAL APP ERROR:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+          <div className="bg-white p-8 rounded-xl shadow-xl max-w-2xl w-full border border-red-200">
+            <div className="flex items-center gap-3 text-red-600 mb-4">
+              <AlertTriangle size={32} />
+              <h1 className="text-2xl font-bold">Ops! Ocorreu um erro crítico.</h1>
+            </div>
+            <p className="text-gray-600 mb-4">
+              O aplicativo encontrou um problema inesperado e precisou ser interrompido para evitar falhas maiores.
+            </p>
+            <div className="bg-gray-900 text-red-300 p-4 rounded-lg overflow-auto font-mono text-sm mb-6">
+              {this.state.error?.message || "Erro desconhecido"}
+              <br/>
+              <span className="text-gray-500 mt-2 block text-xs">Project ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy</span>
+            </div>
+            <button 
+              onClick={() => window.location.reload()}
+              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 transition font-bold w-full"
+            >
+              Recarregar Página
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 // --- UTILS ---
 const maskPhone = (value: string) => {
   return value
@@ -178,7 +236,7 @@ const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
 
 const INITIAL_SETTINGS: SiteSettings = {
   siteName: 'Aluga-se Ubatuba',
-  logoUrl: '/img/LOGO_LEGAL.png', // Updated based on user request
+  logoUrl: '/img/LOGO_LEGAL.png', 
   primaryColor: 'ocean',
   contact: {
     address: 'Av. Leovigildo Dias Vieira, 1000 - Itaguá',
@@ -870,9 +928,9 @@ const AdminProperties: React.FC<{
   );
 };
 
-// --- MAIN APP ---
+// --- MAIN APP CONTENT ---
 
-const App: React.FC = () => {
+const AppContent: React.FC = () => {
   const [properties, setProperties] = useState<Property[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>(INITIAL_SETTINGS);
@@ -880,6 +938,7 @@ const App: React.FC = () => {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
   const [filterType, setFilterType] = useState<PropertyType | 'all'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [dbError, setDbError] = useState<string | null>(null);
   
   // Admin State
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
@@ -892,6 +951,7 @@ const App: React.FC = () => {
     if (savedSettings) {
       setSettings(JSON.parse(savedSettings));
     }
+    console.log("App Initialized. Project ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy");
   }, []);
 
   useEffect(() => {
@@ -902,20 +962,28 @@ const App: React.FC = () => {
   // FETCH PROPERTIES FROM SUPABASE
   const fetchProperties = async () => {
     setIsLoading(true);
-    const { data, error } = await supabase
-      .from('properties')
-      .select('*')
-      .order('created_at', { ascending: false });
-    
-    if (error) {
-      console.error('Error fetching properties:', error);
-      // Check if table missing (Postgres code 42P01) or specific message
-      if (error.code === '42P01' || error.message.includes('relation "properties" does not exist')) {
-        setShowDbSetup(true);
-      }
-    } else if (data) {
-      setProperties(data as Property[]);
-      setShowDbSetup(false);
+    setDbError(null);
+    try {
+        const { data, error } = await supabase
+          .from('properties')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (error) {
+          console.error('Supabase Error:', error);
+          // Check if table missing (Postgres code 42P01) or specific message
+          if (error.code === '42P01' || error.message.includes('relation "properties" does not exist')) {
+            setShowDbSetup(true);
+          } else {
+            setDbError(error.message);
+          }
+        } else if (data) {
+          setProperties(data as Property[]);
+          setShowDbSetup(false);
+        }
+    } catch (err: any) {
+        console.error("Critical Fetch Error:", err);
+        setDbError("Falha na conexão com o banco de dados. Verifique sua internet ou a configuração do Supabase.");
     }
     setIsLoading(false);
   };
@@ -932,24 +1000,26 @@ const App: React.FC = () => {
 
   const handleSaveProperty = async (propertyToSave: Partial<Property>) => {
     setIsLoading(true);
-    
-    // If it's a new property (no ID), remove the ID field so Supabase generates a UUID
-    const payload = { ...propertyToSave };
-    if (!payload.id) {
-        delete payload.id;
-    }
+    try {
+        // If it's a new property (no ID), remove the ID field so Supabase generates a UUID
+        const payload = { ...propertyToSave };
+        if (!payload.id) {
+            delete payload.id;
+        }
 
-    const { error } = await supabase
-        .from('properties')
-        .upsert(payload);
+        const { error } = await supabase
+            .from('properties')
+            .upsert(payload);
 
-    if (error) {
-        console.error('Error saving property:', error.message);
-        alert('Erro ao salvar imóvel: ' + error.message);
-    } else {
-        await fetchProperties();
-        setView(ViewState.ADMIN_PROPERTIES);
-        setEditingProperty({});
+        if (error) {
+            alert('Erro ao salvar imóvel: ' + error.message);
+        } else {
+            await fetchProperties();
+            setView(ViewState.ADMIN_PROPERTIES);
+            setEditingProperty({});
+        }
+    } catch (err: any) {
+        alert('Erro inesperado ao salvar: ' + err.message);
     }
     setIsLoading(false);
   };
@@ -962,7 +1032,6 @@ const App: React.FC = () => {
             .eq('id', id);
 
         if (error) {
-            console.error('Error deleting property:', error.message);
             alert('Erro ao excluir: ' + error.message);
         } else {
             fetchProperties();
@@ -1001,7 +1070,17 @@ const App: React.FC = () => {
     
     return (
       <div className="container mx-auto px-4 py-6">
-        
+        {/* Error Banner */}
+        {dbError && (
+            <div className="bg-red-50 text-red-700 p-4 rounded-xl mb-6 border border-red-200 flex items-center gap-3">
+                <AlertTriangle />
+                <div>
+                    <strong>Erro de Conexão:</strong> {dbError}
+                </div>
+                <button onClick={fetchProperties} className="ml-auto bg-red-100 hover:bg-red-200 px-3 py-1 rounded-lg text-sm">Tentar Novamente</button>
+            </div>
+        )}
+
         {/* Compact Search & Filter Section */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-8 bg-card p-4 rounded-xl border border-ocean-100 shadow-sm">
            {/* Search Bar */}
@@ -1044,7 +1123,7 @@ const App: React.FC = () => {
           {filteredProperties.map(property => (
             <PropertyCard key={property.id} property={property} onClick={handlePropertyClick} />
           ))}
-          {filteredProperties.length === 0 && (
+          {filteredProperties.length === 0 && !isLoading && (
             <div className="col-span-full text-center py-12 text-muted">
                <div className="flex flex-col items-center">
                  <Building2 size={48} className="text-ocean-200 mb-4" />
@@ -1134,10 +1213,23 @@ const App: React.FC = () => {
              onClick={() => { setView(ViewState.HOME); setSelectedProperty(null); }}
            >
              {settings.logoUrl ? (
-               <img src={settings.logoUrl} alt="Logo" className="h-12 w-auto object-contain" />
-             ) : (
-               <UbatubaLogo className="h-12 w-12" />
+               <img 
+                  src={settings.logoUrl} 
+                  alt="Logo" 
+                  className="h-12 w-auto object-contain" 
+                  onError={(e) => {
+                    // Fallback if image fails (e.g. on Vercel deployment if local file missing)
+                    (e.target as HTMLImageElement).style.display = 'none';
+                    (e.target as HTMLImageElement).parentElement?.classList.add('fallback-logo-active');
+                  }}
+               />
+             ) : null}
+             
+             {/* Show SVG if logo fails or is not set - handled by CSS/JS logic above roughly, but simpler to just render both conditionally */}
+             {(!settings.logoUrl || (document.querySelector('.fallback-logo-active'))) && (
+                <UbatubaLogo className="h-12 w-12" />
              )}
+
              <span className="text-ocean-800 hidden md:block">{settings.siteName}</span>
            </div>
 
@@ -1209,9 +1301,20 @@ const App: React.FC = () => {
           </div>
           <div className="container mx-auto px-4 mt-8 pt-8 border-t border-ocean-800 text-center text-xs text-ocean-300">
              &copy; 2024 {settings.siteName}. Todos os direitos reservados.
+             <br/>
+             <span className="opacity-30">v1.0.5 | ID: prj_ZQSnxfIonw4BghaRBuuslHb1ZzVy</span>
           </div>
        </footer>
     </div>
+  );
+};
+
+// --- ROOT COMPONENT WITH ERROR BOUNDARY ---
+const App: React.FC = () => {
+  return (
+    <ErrorBoundary>
+      <AppContent />
+    </ErrorBoundary>
   );
 };
 
