@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://vnuvfvfksnatezrpxqfj.supabase.co';
-// Using the provided secret key to ensure database connection and permissions
-const supabaseKey = process.env.SUPABASE_KEY || 'sb_secret_S8vT_Xs5fvipJCyT2uoW1A_IflgEfHI'; 
+// Using the Public/Anon key for browser usage. 
+// Secret keys (service_role) cannot be used in client-side code.
+const supabaseKey = process.env.SUPABASE_KEY || 'sb_publishable__hwpGDsikmzyMKKxiFtj1w_JrGA975Q'; 
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
