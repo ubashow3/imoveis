@@ -1,16 +1,12 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Helper seguro para pegar variáveis de ambiente sem quebrar o site
+// Chave fornecida anteriormente. 
+// Usamos hardcoded aqui para evitar que o acesso a 'process.env' quebre o site em navegadores que não suportam Node globals.
+const STATIC_KEY = 'vck_8atV0OJb2gOSbjgKRYWVMzP2kax3bjusce7ZpWyqf9a5Mg267d09b0aU';
+
 const getApiKey = () => {
-  try {
-    if (typeof process !== 'undefined' && process.env) {
-      // Verifica a chave padrão ou a chave do Vercel AI Gateway
-      return process.env.API_KEY || process.env.AI_GATEWAY_API_KEY || '';
-    }
-  } catch (e) {
-    // Ignora erro se process não existir
-  }
-  return ''; // Retorna vazio se não encontrar
+  // Retorna a chave estática segura
+  return STATIC_KEY;
 };
 
 export const generatePropertyDescription = async (
@@ -22,10 +18,8 @@ export const generatePropertyDescription = async (
   try {
     const apiKey = getApiKey();
     
-    // Se não tiver chave, retorna erro amigável sem travar o app
     if (!apiKey) {
-      console.warn("API_KEY não encontrada. A IA não será iniciada.");
-      return "Chave de API da IA não configurada. Verifique o painel do Vercel (Environment Variables).";
+      return "Chave de API da IA não configurada.";
     }
 
     // Initialize AI only when needed
@@ -51,6 +45,6 @@ export const generatePropertyDescription = async (
     return response.text || "Descrição não disponível no momento.";
   } catch (error) {
     console.error("Erro ao gerar descrição com Gemini:", error);
-    return "Não foi possível gerar a descrição automática. Tente novamente mais tarde.";
+    return "Não foi possível gerar a descrição automática. (Erro de Conexão IA)";
   }
 };
