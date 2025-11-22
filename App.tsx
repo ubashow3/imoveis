@@ -39,7 +39,9 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCircle,
-  Database
+  Database,
+  Copy,
+  AlertTriangle
 } from 'lucide-react';
 
 // --- UTILS ---
@@ -59,6 +61,30 @@ const fileToBase64 = (file: File): Promise<string> => {
     reader.onerror = error => reject(error);
   });
 };
+
+// --- SQL SETUP CODE ---
+const SQL_SETUP_CODE = `-- 1. Criar a tabela de imóveis
+create table properties (
+  id uuid default gen_random_uuid() primary key,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  title text not null,
+  description text,
+  location text,
+  price numeric,
+  type text,
+  bedrooms integer,
+  bathrooms integer,
+  area numeric,
+  features text[],
+  images text[],
+  views integer default 0
+);
+
+-- 2. Habilitar segurança
+alter table properties enable row level security;
+
+-- 3. Criar política de acesso (Leitura/Escrita Públicas para o App)
+create policy "Public Access" on properties for all using (true) with check (true);`;
 
 // --- SAMPLE DATA FOR SEEDING ---
 const SAMPLE_PROPERTIES = [
@@ -165,6 +191,52 @@ const INITIAL_SETTINGS: SiteSettings = {
 };
 
 // --- COMPONENTS ---
+
+const DatabaseSetup: React.FC = () => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(SQL_SETUP_CODE);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[60vh] text-center">
+      <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6">
+        <AlertTriangle size={48} />
+      </div>
+      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Banco de Dados não Configurado</h1>
+      <p className="text-muted max-w-2xl mb-8">
+        Detectamos que a tabela de imóveis ainda não existe no seu Supabase. 
+        Para o site funcionar, você precisa rodar o comando SQL abaixo no seu painel do Supabase.
+      </p>
+
+      <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left">
+        <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
+          <span className="text-gray-400 text-sm font-mono">SQL Editor</span>
+          <button 
+            onClick={handleCopy}
+            className="flex items-center gap-2 text-white hover:text-ocean-300 text-sm font-medium transition"
+          >
+            {copied ? <CheckCircle size={16} className="text-green-400"/> : <Copy size={16} />}
+            {copied ? 'Copiado!' : 'Copiar SQL'}
+          </button>
+        </div>
+        <pre className="p-6 overflow-x-auto text-sm md:text-base font-mono text-green-400">
+          <code>{SQL_SETUP_CODE}</code>
+        </pre>
+      </div>
+
+      <div className="mt-8 text-sm text-muted">
+        <p>1. Copie o código acima.</p>
+        <p>2. Vá ao seu projeto no Supabase > SQL Editor.</p>
+        <p>3. Cole e clique em "Run".</p>
+        <p>4. Recarregue esta página.</p>
+      </div>
+    </div>
+  );
+};
 
 const PropertyDetails: React.FC<{
   property: Property;
@@ -799,6 +871,7 @@ const App: React.FC = () => {
   
   // Admin State
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
+  const [showDbSetup, setShowDbSetup] = useState(false);
 
   // Apply theme on init
   useEffect(() => {
@@ -823,9 +896,14 @@ const App: React.FC = () => {
       .order('created_at', { ascending: false });
     
     if (error) {
-      console.error('Error fetching properties:', error.message);
+      console.error('Error fetching properties:', error);
+      // Check if table missing (Postgres code 42P01) or specific message
+      if (error.code === '42P01' || error.message.includes('relation "properties" does not exist')) {
+        setShowDbSetup(true);
+      }
     } else if (data) {
       setProperties(data as Property[]);
+      setShowDbSetup(false);
     }
     setIsLoading(false);
   };
@@ -1020,6 +1098,10 @@ const App: React.FC = () => {
     </div>
   );
 
+  if (showDbSetup) {
+    return <DatabaseSetup />;
+  }
+
   return (
     <div className="min-h-screen bg-page font-sans text-main">
        {/* Header Common */}
@@ -1112,3 +1194,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+    
