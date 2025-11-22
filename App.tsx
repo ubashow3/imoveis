@@ -932,6 +932,9 @@ const AppContent: React.FC = () => {
   const [editingProperty, setEditingProperty] = useState<Partial<Property>>({});
   const [showDbSetup, setShowDbSetup] = useState(false);
 
+  // SAFETY TIMEOUT REF
+  const loadingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   useEffect(() => {
     console.log("App Initializing...");
     const savedSettings = localStorage.getItem('siteSettings');
@@ -946,20 +949,33 @@ const AppContent: React.FC = () => {
     setLogoFailed(false);
   }, [settings]);
 
-  // FETCH PROPERTIES
+  // FETCH PROPERTIES WITH SAFETY TIMEOUT
   const fetchProperties = async () => {
     console.log("Fetching properties...");
     setIsLoading(true);
     setDbError(null);
+
+    // Safety Timeout: If database hangs, unlock UI after 10 seconds
+    if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+    loadingTimeoutRef.current = setTimeout(() => {
+        if (isLoading) {
+            setIsLoading(false);
+            setDbError("Tempo limite excedido. Verifique sua conexão ou tente recarregar.");
+        }
+    }, 10000);
+
     try {
         const { data, error } = await supabase
           .from('properties')
           .select('*')
           .order('created_at', { ascending: false });
         
+        // Clear timeout if successful
+        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+
         if (error) {
           console.error("Supabase Error:", error);
-          if (error.code === '42P01' || error.message?.includes('relation "properties" does not exist')) {
+          if (error.code === '42P01' || (error.message && error.message.includes('relation "properties" does not exist'))) {
             setShowDbSetup(true);
           } else {
             // IMPROVED ERROR MESSAGE HANDLING
@@ -993,6 +1009,9 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
     fetchProperties();
+    return () => {
+        if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
+    };
   }, []);
 
   const handlePropertyClick = (property: Property) => {

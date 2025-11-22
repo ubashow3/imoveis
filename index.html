@@ -83,6 +83,18 @@
         --text-main: #000000;
         --text-muted: #4b5563;
       }
+      
+      /* Initial Loading State */
+      #root:empty::before {
+        content: 'Carregando Sistema...';
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        font-family: sans-serif;
+        color: #6b7280;
+        font-size: 1.2rem;
+      }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
