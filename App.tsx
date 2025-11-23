@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef, Component } from 'react';
+
+import React, { useState, useEffect, useRef, useLayoutEffect, Component } from 'react';
 import { Property, ViewState, PropertyType, SiteSettings, ThemeOption } from './types';
 import { generatePropertyDescription } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
@@ -15,11 +16,8 @@ import {
 interface ErrorBoundaryProps { children?: React.ReactNode; }
 interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -27,13 +25,17 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
   render() {
     if (this.state.hasError) {
+      // Remove loading screen if error happens
+      const loader = document.getElementById('loading-screen');
+      if (loader) loader.style.display = 'none';
+
       return (
         <div className="min-h-screen flex items-center justify-center bg-red-50 p-4 text-center">
           <div className="bg-white p-8 rounded-xl shadow-lg max-w-lg">
             <AlertTriangle size={48} className="mx-auto text-red-600 mb-4" />
             <h1 className="text-xl font-bold text-red-700 mb-2">Erro de Renderização</h1>
             <p className="text-gray-600 mb-4">Ocorreu um erro ao exibir a interface.</p>
-            <pre className="bg-gray-100 p-2 rounded text-xs text-left overflow-auto mb-4">
+            <pre className="bg-gray-100 p-2 rounded text-xs text-left overflow-auto mb-4 max-h-40">
               {this.state.error?.message}
             </pre>
             <button onClick={() => window.location.reload()} className="bg-red-600 text-white px-4 py-2 rounded">Recarregar</button>
@@ -371,8 +373,14 @@ const AppContent: React.FC = () => {
   const [showDbSetup, setShowDbSetup] = useState(false);
   const loadingTimeoutRef = useRef<any>(null);
 
+  // --- FORÇAR REMOÇÃO DO LOADER ---
+  useLayoutEffect(() => {
+    const loader = document.getElementById('loading-screen');
+    if (loader) loader.style.display = 'none';
+  }, []);
+
   useEffect(() => {
-    console.log("App V.3.0 - Database Settings Enabled");
+    console.log("App V.3.2 - Force Loader Removal");
     fetchSettings();
     fetchProperties();
     return () => { if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current); };

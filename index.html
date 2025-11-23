@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
@@ -91,6 +92,7 @@
         left: 0;
         background: white;
         z-index: 9999;
+        transition: opacity 0.3s ease;
       }
       #error-display {
         display: none;
@@ -148,14 +150,14 @@
 </head>
   <body class="bg-page text-main transition-colors duration-300">
     <div id="loading-screen">
-      <h2 style="font-size: 1.5rem; margin-bottom: 10px;">Iniciando App...</h2>
-      <p>Aguarde um momento.</p>
+      <h2 style="font-size: 1.5rem; margin-bottom: 10px; color: #0284c7; font-weight: bold;">Iniciando App...</h2>
+      <p id="loading-text">Aguarde, conectando ao servidor.</p>
     </div>
     <div id="error-display"></div>
     <div id="root"></div>
     
-    <!-- GLOBAL ERROR HANDLER: Captura erros que travam o site antes do React -->
     <script>
+      // 1. Global Error Handler (Captura erros de sintaxe antes do React)
       window.addEventListener('error', function(event) {
         const loader = document.getElementById('loading-screen');
         const errorDiv = document.getElementById('error-display');
@@ -163,25 +165,22 @@
         if (errorDiv) {
           errorDiv.style.display = 'block';
           errorDiv.innerHTML = `
-            <h1 style="font-size: 24px; margin-bottom: 10px;">Erro Fatal</h1>
-            <p>O site não conseguiu iniciar.</p>
-            <pre style="background:#f3f4f6; padding:15px; border-radius:8px; overflow:auto; margin-top:10px;">${event.message}</pre>
-            <p style="margin-top:10px; font-size: 0.9rem; color: #666;">Isso geralmente ocorre por erro de sintaxe em um arquivo.</p>
+            <h1 style="font-size: 24px; margin-bottom: 10px;">Erro Fatal de Inicialização</h1>
+            <p>O site não conseguiu carregar os scripts.</p>
+            <pre style="background:#f3f4f6; padding:15px; border-radius:8px; overflow:auto; margin-top:10px; color:red;">${event.message}</pre>
           `;
         }
       });
 
-      // Remove loader when React mounts
-      window.addEventListener('load', () => {
-        const observer = new MutationObserver((mutations) => {
-           if (document.getElementById('root').childElementCount > 0) {
-             const loader = document.getElementById('loading-screen');
-             if (loader) loader.style.display = 'none';
-             observer.disconnect();
-           }
-        });
-        observer.observe(document.getElementById('root'), { childList: true });
-      });
+      // 2. Timeout de Segurança (Destrava a tela se o React demorar)
+      setTimeout(() => {
+         const loader = document.getElementById('loading-screen');
+         if (loader && loader.style.display !== 'none') {
+            document.getElementById('loading-text').innerHTML = 
+              'O site está demorando muito.<br><br>' + 
+              '<button onclick="location.reload()" style="padding:10px 20px; background:#0284c7; color:white; border:none; border-radius:5px; cursor:pointer">Recarregar</button>';
+         }
+      }, 8000); // 8 segundos limite
     </script>
   </body>
 </html>
