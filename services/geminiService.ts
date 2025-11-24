@@ -1,6 +1,9 @@
 
 import { GoogleGenAI } from "@google/genai";
 
+// Chave fornecida pelo usuário para funcionamento imediato no Vercel
+const DIRECT_API_KEY = 'AIzaSyBKn3Szrk29FdUiYrB9IJwe3RBDYS-OARQ';
+
 export const generatePropertyDescription = async (
   features: string[],
   location: string,
@@ -8,16 +11,24 @@ export const generatePropertyDescription = async (
   bedrooms: number
 ): Promise<string> => {
   try {
-    // Tenta obter a chave de forma segura para evitar ReferenceError no navegador
+    // 1. Tenta pegar a chave do ambiente (segurança padrão)
+    // 2. Se falhar (comum no Vercel frontend), usa a chave direta fornecida
     let apiKey = '';
+    
     try {
-      apiKey = process.env.API_KEY || '';
+      if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+        apiKey = process.env.API_KEY;
+      }
     } catch (e) {
-      console.warn("Acesso direto a process.env falhou (ambiente browser).");
+      // Ignora erro de process is not defined
     }
 
     if (!apiKey) {
-      return "⚠️ ERRO: Chave da IA não configurada.\n\nVá no painel do Vercel > Settings > Environment Variables e adicione a chave 'API_KEY' com sua credencial do Google AI Studio.";
+      apiKey = DIRECT_API_KEY;
+    }
+
+    if (!apiKey || apiKey.trim() === '') {
+      return "⚠️ ERRO: Chave da IA não encontrada. Verifique o arquivo geminiService.ts.";
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -42,6 +53,6 @@ export const generatePropertyDescription = async (
     return response.text || "Descrição não disponível no momento.";
   } catch (error: any) {
     console.error("Erro ao gerar descrição com Gemini:", error);
-    return `Erro ao conectar com a IA: ${error.message || "Verifique a chave API_KEY no Vercel."}`;
+    return `Erro ao conectar com a IA: ${error.message || "Verifique se a chave API é válida."}`;
   }
 };
