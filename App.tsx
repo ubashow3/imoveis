@@ -505,6 +505,7 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
   });
   const [loading, setLoading] = useState(false);
   const [imgUrl, setImgUrl] = useState('');
+  const [newFeature, setNewFeature] = useState('');
   const [uploading, setUploading] = useState(false);
 
   const handleGenerateDesc = async () => {
@@ -525,8 +526,25 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
          setFormData(prev => ({ ...prev, images: [...(prev.images || []), url] }));
        }
        setUploading(false);
-       // Limpa o input para permitir selecionar o mesmo arquivo novamente se necessário
        e.target.value = '';
+    }
+  };
+
+  const addFeature = () => {
+    if (newFeature.trim()) {
+      setFormData(prev => ({ ...prev, features: [...(prev.features || []), newFeature.trim()] }));
+      setNewFeature('');
+    }
+  };
+
+  const removeFeature = (index: number) => {
+    setFormData(prev => ({ ...prev, features: prev.features?.filter((_, i) => i !== index) }));
+  };
+
+  const handleFeatureKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addFeature();
     }
   };
 
@@ -564,6 +582,29 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
            <input type="number" placeholder="Quartos" className="p-2 border rounded" value={formData.bedrooms || ''} onChange={e => setFormData({ ...formData, bedrooms: Number(e.target.value) })} />
            <input type="number" placeholder="Banheiros" className="p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} />
            <input type="number" placeholder="Área (m²)" className="p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} />
+        </div>
+
+        {/* CARACTERÍSTICAS (Campo Novo) */}
+        <div>
+           <label className="block text-sm font-medium text-muted mb-1">Características (Ex: Piscina, WiFi, Ar Condicionado)</label>
+           <div className="flex gap-2 mb-2">
+              <input 
+                className="flex-1 p-2 border rounded" 
+                placeholder="Digite e aperte Enter..." 
+                value={newFeature} 
+                onChange={e => setNewFeature(e.target.value)}
+                onKeyDown={handleFeatureKey}
+              />
+              <button onClick={addFeature} className="bg-ocean-100 text-ocean-600 px-4 rounded font-bold hover:bg-ocean-200"><Plus/></button>
+           </div>
+           <div className="flex flex-wrap gap-2">
+             {formData.features?.map((f, i) => (
+                <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-ocean-100">
+                  {f}
+                  <button onClick={() => removeFeature(i)} className="text-red-500 hover:text-red-700 rounded-full p-0.5"><X size={14}/></button>
+                </span>
+             ))}
+           </div>
         </div>
 
         <div>
@@ -794,8 +835,17 @@ const AppContent: React.FC = () => {
     if (view === ViewState.ADMIN_PROPERTIES) return true; // Admin vê tudo
     if (p.active === false) return false; // Público não vê inativos
     
-    // Filtro por Tipo (Botões)
-    const matchesType = filterType === 'all' || p.type === filterType;
+    // Filtro por Tipo (Botões) - Flexivel
+    // Se filterType for 'rent_seasonal', aceitamos 'rent_seasonal', 'temporada' ou 'rent'
+    // Se filterType for 'sale', aceitamos 'sale' ou 'venda'
+    let matchesType = filterType === 'all';
+    if (!matchesType) {
+      if (filterType === 'rent_seasonal') {
+         matchesType = p.type === 'rent_seasonal' || p.type === 'temporada' || p.type === 'rent';
+      } else if (filterType === 'sale') {
+         matchesType = p.type === 'sale' || p.type === 'venda';
+      }
+    }
     
     // Filtro por Localização (Busca)
     const matchesLocation = locationFilter === '' || 
