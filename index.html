@@ -138,12 +138,13 @@
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
     "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0"
+    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.84.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
   }
 }
 </script>
@@ -157,7 +158,7 @@
     <div id="root"></div>
     
     <script>
-      // 1. Global Error Handler (Captura erros de sintaxe antes do React)
+      // 1. Global Error Handler
       window.addEventListener('error', function(event) {
         const loader = document.getElementById('loading-screen');
         const errorDiv = document.getElementById('error-display');
@@ -172,7 +173,7 @@
         }
       });
 
-      // 2. Timeout de Segurança (Destrava a tela se o React demorar)
+      // 2. Timeout de Segurança
       setTimeout(() => {
          const loader = document.getElementById('loading-screen');
          if (loader && loader.style.display !== 'none') {
@@ -180,7 +181,7 @@
               'O site está demorando muito.<br><br>' + 
               '<button onclick="location.reload()" style="padding:10px 20px; background:#0284c7; color:white; border:none; border-radius:5px; cursor:pointer">Recarregar</button>';
          }
-      }, 8000); // 8 segundos limite
+      }, 5000); 
     </script>
   </body>
 </html>

@@ -1,15 +1,14 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect, Component } from 'react';
-import { Property, ViewState, PropertyType, SiteSettings, ThemeOption } from './types';
+import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
 import { supabase } from './services/supabaseClient';
 import { PropertyCard } from './components/PropertyCard';
 import { 
-  LayoutDashboard, Plus, Search, Umbrella, Building2, ArrowLeft, LogOut, Sparkles,
-  CheckCircle, Menu, X, MapPin, Bed, Bath, Expand, Waves, Settings, Instagram,
-  Facebook, Phone, Clock, Mail, Palette, Save, Trash2, Image as ImageIcon, Edit,
-  Users, Calendar, Upload, Camera, ChevronLeft, ChevronRight, UserCircle, Database,
-  Copy, AlertTriangle, RefreshCw, Globe
+  LayoutDashboard, Plus, Settings, Phone, Palette, Save, Trash2, 
+  Image as ImageIcon, Edit, UserCircle, Globe, Database,
+  ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
+  AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
+  Eye, EyeOff, Star, FileText
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -17,7 +16,10 @@ interface ErrorBoundaryProps { children?: React.ReactNode; }
 interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
 
 class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = { hasError: false, error: null };
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -25,7 +27,6 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   render() {
     if (this.state.hasError) {
-      // Remove loading screen if error happens
       const loader = document.getElementById('loading-screen');
       if (loader) loader.style.display = 'none';
 
@@ -56,8 +57,8 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.onerror = error => reject(error);
 });
 
-// --- SQL SETUP ---
-const SQL_SETUP_CODE = `-- 1. Tabela de Imóveis
+// --- SQL SETUP (ATUALIZADO PARA CAMPOS NOVOS) ---
+const SQL_SETUP_CODE = `-- 1. Tabela de Imóveis (Garante colunas novas)
 create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -71,8 +72,26 @@ create table if not exists properties (
   area numeric,
   features text[],
   images text[],
-  views integer default 0
+  views integer default 0,
+  active boolean default true,
+  featured boolean default false,
+  owner_notes text
 );
+
+-- Migração: Adicionar colunas caso a tabela já exista (sem perder dados)
+do $$
+begin
+  if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='active') then
+    alter table properties add column active boolean default true;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='featured') then
+    alter table properties add column featured boolean default false;
+  end if;
+  if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='owner_notes') then
+    alter table properties add column owner_notes text;
+  end if;
+end
+$$;
 
 -- 2. Tabela de Configurações do Site
 create table if not exists site_settings (
@@ -93,35 +112,6 @@ create policy "Public Settings" on site_settings for all using (true) with check
 -- 4. Inicializar Configuração Padrão (se não existir)
 insert into site_settings (id, data) values (1, '{}'::jsonb) on conflict do nothing;
 `;
-
-const SAMPLE_PROPERTIES = [
-  {
-    title: "Casa de Alto Padrão em Itamambuca",
-    description: "Espetacular casa pé na areia com piscina e área gourmet completa.",
-    location: "Itamambuca, Ubatuba",
-    price: 3500,
-    type: "rent_seasonal",
-    bedrooms: 5,
-    bathrooms: 6,
-    area: 450,
-    features: ["Piscina", "Churrasqueira", "Ar Condicionado", "Wi-Fi", "Jardim"],
-    images: ["https://images.unsplash.com/photo-1600596542815-60c37c6525fa?auto=format&fit=crop&w=800"],
-    views: 120
-  },
-  {
-    title: "Apartamento Vista Mar Praia Grande",
-    description: "Apartamento moderno e recém reformado no melhor ponto da Praia Grande.",
-    location: "Praia Grande, Ubatuba",
-    price: 850000,
-    type: "sale",
-    bedrooms: 3,
-    bathrooms: 2,
-    area: 110,
-    features: ["Vista Mar", "Varanda Gourmet", "Mobiliado", "Elevador"],
-    images: ["https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800"],
-    views: 450
-  }
-];
 
 const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   <svg viewBox="0 0 200 200" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -151,7 +141,8 @@ const INITIAL_SETTINGS: SiteSettings = {
   social: { instagram: '@alugaseubatuba', facebook: '/alugaseubatuba' }
 };
 
-// --- SUB-COMPONENTS ---
+// --- COMPONENTES ---
+
 const DatabaseSetup: React.FC = () => {
   const [copied, setCopied] = useState(false);
   const handleCopy = () => {
@@ -162,8 +153,11 @@ const DatabaseSetup: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[60vh] text-center">
       <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
-      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização do Banco de Dados</h1>
-      <p className="text-muted max-w-2xl mb-8">Precisamos criar a tabela de <b>Configurações</b> para salvar seu logo e cores no banco.</p>
+      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização de Banco de Dados</h1>
+      <p className="text-muted max-w-2xl mb-8">
+        Detectamos que seu banco precisa de atualização (novos campos de status/destaque).<br/>
+        Copie o SQL abaixo e rode no Supabase para garantir que tudo funcione.
+      </p>
       <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
         <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
           <span className="text-gray-400 text-sm font-mono">SQL</span>
@@ -180,7 +174,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   const [imgIdx, setImgIdx] = useState(0);
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
-  const images = property.images?.length ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
+  const images = property.images && property.images.length > 0 ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
   
   const calcTotal = () => {
     if (!start || !end) return 0;
@@ -210,7 +204,10 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <h1 className="text-3xl font-bold text-main">{property.title}</h1>
+          <div className="flex items-center gap-2 mb-2">
+            <h1 className="text-3xl font-bold text-main">{property.title}</h1>
+            {property.featured && <Star size={24} className="text-yellow-500 fill-yellow-500"/>}
+          </div>
           <div className="flex items-center text-muted mt-2"><MapPin size={18} className="mr-1" /> {property.location}</div>
           <div className="flex gap-6 border-y border-ocean-100 py-6 my-6">
              <div className="text-center"><Bed className="mx-auto text-ocean-500"/> <b>{property.bedrooms}</b></div>
@@ -244,7 +241,14 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
 };
 
 const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Property>) => Promise<void>; onCancel: () => void; }> = ({ property, onSave, onCancel }) => {
-  const [formData, setFormData] = useState<Partial<Property>>(property || { type: 'sale', features: [], images: [] });
+  const [formData, setFormData] = useState<Partial<Property>>(property || { 
+    type: 'sale', 
+    features: [], 
+    images: [],
+    active: true,
+    featured: false,
+    owner_notes: ''
+  });
   const [loading, setLoading] = useState(false);
   const [imgUrl, setImgUrl] = useState('');
 
@@ -269,6 +273,20 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
       <div className="flex items-center mb-6 text-ocean-600 cursor-pointer" onClick={onCancel}><ArrowLeft className="mr-2" /> Voltar</div>
       <h2 className="text-2xl font-bold mb-6">{property ? 'Editar Imóvel' : 'Novo Imóvel'}</h2>
       <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100 space-y-4">
+        
+        {/* Status e Destaque */}
+        <div className="flex gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+           <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={formData.active !== false} onChange={e => setFormData({ ...formData, active: e.target.checked })} className="w-5 h-5 accent-ocean-600"/>
+              <span className="font-bold flex items-center gap-1">{formData.active !== false ? <Eye size={16}/> : <EyeOff size={16}/>} Visível no Site</span>
+           </label>
+           <div className="w-px bg-gray-300"></div>
+           <label className="flex items-center gap-2 cursor-pointer text-yellow-600">
+              <input type="checkbox" checked={formData.featured || false} onChange={e => setFormData({ ...formData, featured: e.target.checked })} className="w-5 h-5 accent-yellow-500"/>
+              <span className="font-bold flex items-center gap-1"><Star size={16}/> Destaque / Super Oferta</span>
+           </label>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <select className="p-2 border rounded" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
             <option value="sale">Venda</option>
@@ -285,6 +303,13 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
            <input type="number" placeholder="Banheiros" className="p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} />
            <input type="number" placeholder="Área (m²)" className="p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} />
         </div>
+
+        {/* Campo Interno */}
+        <div>
+           <label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><FileText size={14}/> Anotações Internas (Proprietário, Chaves, etc)</label>
+           <input className="w-full p-2 border border-yellow-200 bg-yellow-50 rounded text-sm" placeholder="Ex: Chave na portaria, Proprietário Sr. João (12) 999..." value={formData.owner_notes || ''} onChange={e => setFormData({ ...formData, owner_notes: e.target.value })} />
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-muted mb-1">Fotos do Imóvel</label>
           <div className="flex gap-2 mb-2">
@@ -380,7 +405,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.2 - Force Loader Removal");
+    console.log("App V.3.4 - Audit & Update");
     fetchSettings();
     fetchProperties();
     return () => { if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current); };
@@ -393,10 +418,17 @@ const AppContent: React.FC = () => {
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase.from('site_settings').select('data').single();
-      if (data && data.data && Object.keys(data.data).length > 0) {
+      if (error) {
+        if (error.code === '42P01') {
+          console.warn("Tabela site_settings não existe.");
+          setShowDbSetup(true);
+        }
+      } else if (data && data.data && Object.keys(data.data).length > 0) {
         setSettings({ ...INITIAL_SETTINGS, ...data.data });
       }
-    } catch (e) { console.log("Usando configurações padrão (Local)"); }
+    } catch (e) { 
+      console.log("Usando configurações padrão (Local)", e); 
+    }
   };
 
   const fetchProperties = async () => {
@@ -411,15 +443,26 @@ const AppContent: React.FC = () => {
     }, 8000);
 
     try {
-      const { data, error } = await supabase.from('properties').select('*').order('created_at', { ascending: false });
+      // Ordena: Primeiro Destaques, depois data de criação
+      const { data, error } = await supabase.from('properties')
+        .select('*')
+        .order('featured', { ascending: false, nullsLast: true })
+        .order('created_at', { ascending: false });
+
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
 
       if (error) {
         if (error.code === '42P01' || error.message.includes('does not exist')) setShowDbSetup(true);
         else setDbError(error.message || JSON.stringify(error));
       } else if (data) {
-        setProperties(data.map((p: any) => ({ ...p, images: p.images || [], features: p.features || [] })));
-        setShowDbSetup(false);
+        setProperties(data.map((p: any) => ({ 
+          ...p, 
+          images: p.images || [], 
+          features: p.features || [],
+          // Garante valores padrão se a coluna for nova
+          active: p.active !== false,
+          featured: p.featured === true
+        })));
       }
     } catch (err: any) {
       setDbError(err.message || "Erro de conexão.");
@@ -431,7 +474,7 @@ const AppContent: React.FC = () => {
     setSettings(newSettings);
     const { error } = await supabase.from('site_settings').upsert({ id: 1, data: newSettings });
     if (error) {
-       if (error.code === '42P01') setShowDbSetup(true); // Tabela não existe
+       if (error.code === '42P01') setShowDbSetup(true);
        else alert("Erro ao salvar no banco: " + error.message);
     } else {
        alert("Configurações salvas no Banco de Dados!");
@@ -458,6 +501,24 @@ const AppContent: React.FC = () => {
   };
 
   const handleSeed = async () => {
+    const SAMPLE_PROPERTIES = [
+      {
+        title: "Casa de Alto Padrão em Itamambuca",
+        description: "Espetacular casa pé na areia com piscina.",
+        location: "Itamambuca, Ubatuba",
+        price: 3500,
+        type: "rent_seasonal",
+        bedrooms: 5,
+        bathrooms: 6,
+        area: 450,
+        features: ["Piscina", "Churrasqueira", "Wi-Fi"],
+        images: ["https://images.unsplash.com/photo-1600596542815-60c37c6525fa?auto=format&fit=crop&w=800"],
+        views: 120,
+        featured: true,
+        active: true
+      }
+    ];
+
     setIsLoading(true);
     const { error } = await supabase.from('properties').insert(SAMPLE_PROPERTIES);
     if (error) {
@@ -469,6 +530,9 @@ const AppContent: React.FC = () => {
     }
     setIsLoading(false);
   };
+
+  // Filtragem para o usuário comum (só mostra ativos)
+  const visibleProperties = properties.filter(p => view === ViewState.ADMIN_PROPERTIES ? true : p.active !== false);
 
   if (showDbSetup) return <DatabaseSetup />;
 
@@ -506,10 +570,15 @@ const AppContent: React.FC = () => {
 
         {view === ViewState.HOME && (
           <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {properties.map(p => <PropertyCard key={p.id} property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />)}
-            {properties.length === 0 && !isLoading && !dbError && (
+            {visibleProperties.map(p => (
+              <div key={p.id} className="relative group">
+                 {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
+                 <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
+              </div>
+            ))}
+            {visibleProperties.length === 0 && !isLoading && !dbError && (
                <div className="col-span-full text-center py-12 text-muted">
-                  <p>Nenhum imóvel encontrado.</p>
+                  <p>Nenhum imóvel disponível no momento.</p>
                   <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="mt-4 text-ocean-600 font-bold">Acessar Painel Admin</button>
                </div>
             )}
@@ -518,10 +587,8 @@ const AppContent: React.FC = () => {
         
         {view === ViewState.DETAILS && selectedProperty && <PropertyDetails property={selectedProperty} onBack={() => setView(ViewState.HOME)} bookingPhone={settings.contact.bookingPhone || settings.contact.phone} />}
         
-        {/* --- ÁREA ADMINISTRATIVA COMPLETA --- */}
         {view === ViewState.ADMIN_PROPERTIES && (
            <div className="container mx-auto p-4 flex flex-col md:flex-row gap-6">
-              {/* Sidebar Mobile/Desktop */}
               <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 sticky top-20 h-fit z-10 bg-page">
                   <button className="flex-1 bg-ocean-600 text-white p-3 rounded text-left font-bold flex gap-2"><LayoutDashboard size={18}/> Imóveis</button>
                   <button onClick={() => setView(ViewState.ADMIN_SETTINGS)} className="flex-1 bg-white text-muted p-3 rounded text-left hover:bg-gray-50 flex gap-2"><Settings size={18}/> Configurações</button>
@@ -535,11 +602,15 @@ const AppContent: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-1 gap-4">
                    {properties.map(p => (
-                     <div key={p.id} className="bg-white p-4 rounded-lg shadow flex justify-between items-center">
+                     <div key={p.id} className={`bg-white p-4 rounded-lg shadow flex justify-between items-center ${p.active === false ? 'opacity-60 bg-gray-50' : ''} ${p.featured ? 'border-l-4 border-yellow-400' : ''}`}>
                         <div className="flex items-center gap-4">
                            <img src={p.images[0] || 'https://via.placeholder.com/50'} className="w-16 h-16 object-cover rounded" />
                            <div>
-                              <h3 className="font-bold">{p.title}</h3>
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-bold">{p.title}</h3>
+                                {p.active === false && <span className="text-xs bg-gray-200 text-gray-600 px-2 rounded">Inativo</span>}
+                                {p.featured && <Star size={14} className="text-yellow-500 fill-yellow-500"/>}
+                              </div>
                               <p className="text-sm text-muted">{p.location}</p>
                            </div>
                         </div>
