@@ -760,6 +760,11 @@ const AppContent: React.FC = () => {
     document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
   }, [settings]);
 
+  // RESETAR erro do logo no header quando a URL mudar
+  useEffect(() => {
+    setLogoFailed(false);
+  }, [settings.logoUrl]);
+
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase.from('site_settings').select('data').single();
