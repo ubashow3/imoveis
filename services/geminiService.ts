@@ -7,7 +7,7 @@ const DIRECT_API_KEY = 'AIzaSyBKn3Szrk29FdUiYrB9IJwe3RBDYS-OARQ';
 interface PropertyData {
   title?: string;
   location?: string;
-  type?: 'sale' | 'rent_seasonal';
+  type?: 'sale' | 'rent_seasonal' | 'rent_longterm';
   bedrooms?: number;
   bathrooms?: number;
   area?: number;
@@ -39,7 +39,11 @@ export const generatePropertyDescription = async (data: PropertyData): Promise<s
 
     // Formatar valores para o prompt
     const featureList = data.features && data.features.length > 0 ? data.features.join(', ') : 'Não especificadas';
-    const typeLabel = data.type === 'sale' ? 'Venda' : 'Aluguel de Temporada';
+    
+    let typeLabel = 'Venda';
+    if (data.type === 'rent_seasonal') typeLabel = 'Aluguel de Temporada';
+    if (data.type === 'rent_longterm') typeLabel = 'Locação Definitiva (Anual)';
+
     const priceLabel = data.price ? `R$ ${data.price}` : 'Sob consulta';
 
     const prompt = `
@@ -58,7 +62,7 @@ export const generatePropertyDescription = async (data: PropertyData): Promise<s
 
       DIRETRIZES:
       1. Comece com uma frase de impacto (Hook).
-      2. Destaque os pontos fortes (localização, espaço, lazer).
+      2. Destaque os pontos fortes. Se for Locação Definitiva, foque em conforto para moradia e contrato anual. Se for Temporada, foque em férias e lazer.
       3. Use os dados numéricos (área, quartos) de forma natural no texto.
       4. Finalize com uma chamada para ação (Call to Action).
       5. Use emojis moderadamente para dar leveza.

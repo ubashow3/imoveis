@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users, Key
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -339,7 +339,10 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const images = property.images && property.images.length > 0 ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
-  const isSeasonal = property.type !== 'sale';
+  
+  // Tipos
+  const isSeasonal = property.type === 'rent_seasonal';
+  const isLongTerm = property.type === 'rent_longterm';
   
   const getDays = () => {
     if (!start || !end) return 0;
@@ -364,11 +367,25 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
       const formattedEnd = new Date(end).toLocaleDateString('pt-BR');
       const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice);
       msg = `Olá! Gostaria de reservar *${property.title}*.\n📅 Check-in: ${formattedStart}\n📅 Check-out: ${formattedEnd}\n🌙 Diárias: ${days}\n💰 Total: ${formattedTotal}`;
+    } else if (isLongTerm) {
+      msg = `Olá! Tenho interesse na locação definitiva do imóvel *${property.title}* (R$ ${property.price}/mês). Gostaria de agendar uma visita ou saber mais sobre o contrato.`;
     } else {
       msg = `Olá! Tenho interesse em comprar o imóvel *${property.title}* (R$ ${property.price}).`;
     }
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
+
+  const getPriceLabel = () => {
+    if (isSeasonal) return 'Valor por Noite';
+    if (isLongTerm) return 'Valor Mensal';
+    return 'Valor de Venda';
+  };
+
+  const getTypeBadge = () => {
+    if (isSeasonal) return <span className="w-fit px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white bg-green-500">Aluguel de Temporada</span>;
+    if (isLongTerm) return <span className="w-fit px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white bg-purple-500">Locação Definitiva</span>;
+    return <span className="w-fit px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white bg-blue-500">Venda</span>;
+  }
 
   return (
     <div className="container mx-auto px-4 py-6">
@@ -386,9 +403,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
           <div className="flex flex-col gap-2 mb-4">
-            <span className={`w-fit px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white ${isSeasonal ? 'bg-green-500' : 'bg-blue-500'}`}>
-               {isSeasonal ? 'Aluguel de Temporada' : 'Venda'}
-            </span>
+            {getTypeBadge()}
             <div className="flex items-center gap-2">
               <h1 className="text-3xl font-bold text-main leading-tight">{property.title}</h1>
               {property.featured && <Star size={24} className="text-yellow-500 fill-yellow-500 flex-shrink-0"/>}
@@ -419,7 +434,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                 <span className="text-4xl font-extrabold text-ocean-600 block mb-1">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
                 </span>
-                <span className="text-muted text-sm uppercase font-bold tracking-wide">{isSeasonal ? 'Valor por Noite' : 'Valor de Venda'}</span>
+                <span className="text-muted text-sm uppercase font-bold tracking-wide">{getPriceLabel()}</span>
                 {isSeasonal && pricePerPerson > 0 && (
                   <div className="mt-2 text-sm bg-green-50 text-green-700 py-1 px-2 rounded-lg inline-block font-semibold">
                     Sai a {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pricePerPerson)} por pessoa!
@@ -458,7 +473,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                </div>
              ) : (
                <div className="mb-2">
-                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-transform"><Phone size={24} /> Falar com Corretor</button>
+                 <button onClick={handleBook} className={`w-full ${isLongTerm ? 'bg-purple-600 hover:bg-purple-700' : 'bg-ocean-600 hover:bg-ocean-700'} text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-transform`}><Phone size={24} /> Falar com Corretor</button>
                </div>
              )}
           </div>
@@ -528,6 +543,7 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
             <select className="w-full p-2 border rounded" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
               <option value="sale">Venda</option>
               <option value="rent_seasonal">Aluguel Temporada</option>
+              <option value="rent_longterm">Locação Definitiva (Mensal)</option>
             </select>
           </div>
           <div><label className="block text-sm font-bold text-muted mb-1">Título</label><input placeholder="Ex: Casa Linda" className="w-full p-2 border rounded" value={formData.title || ''} onChange={e => setFormData({ ...formData, title: e.target.value })} /></div>
@@ -633,7 +649,9 @@ const AppContent: React.FC = () => {
   const [logoFailed, setLogoFailed] = useState(false);
   const [showDbSetup, setShowDbSetup] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal'>('all');
+  
+  // Tipos: 'all', 'sale', 'rent_seasonal', 'rent_longterm'
+  const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal' | 'rent_longterm'>('all');
   const [locationFilter, setLocationFilter] = useState('');
   const [priceRange, setPriceRange] = useState<{max: number}>({max: 0});
   const [minBedrooms, setMinBedrooms] = useState(0);
@@ -698,11 +716,15 @@ const AppContent: React.FC = () => {
   const visibleProperties = properties.filter(p => {
     if (view === ViewState.ADMIN_PROPERTIES) return true;
     if (p.active === false) return false;
+    
+    // Filtragem de Tipo aprimorada
     let matchesType = filterType === 'all';
     if (!matchesType) {
-      if (filterType === 'rent_seasonal') matchesType = p.type === 'rent_seasonal' || p.type === 'temporada' || p.type === 'rent';
+      if (filterType === 'rent_seasonal') matchesType = p.type === 'rent_seasonal' || p.type === 'temporada';
+      else if (filterType === 'rent_longterm') matchesType = p.type === 'rent_longterm';
       else if (filterType === 'sale') matchesType = p.type === 'sale' || p.type === 'venda';
     }
+
     const matchesLocation = locationFilter === '' || p.location.toLowerCase().includes(locationFilter.toLowerCase()) || p.title.toLowerCase().includes(locationFilter.toLowerCase());
     const matchesBedrooms = minBedrooms === 0 || p.bedrooms >= minBedrooms;
     const matchesPrice = priceRange.max === 0 || p.price <= priceRange.max;
@@ -731,10 +753,11 @@ const AppContent: React.FC = () => {
           <>
             <div className="bg-ocean-50 py-4 md:py-8 border-b border-ocean-100">
                <div className="container mx-auto px-2 md:px-4">
-                 <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
-                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[90px] ${filterType === 'all' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Todos</button>
-                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[140px] ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Temporada</button>
-                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[100px] ${filterType === 'sale' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Comprar</button>
+                 <div className="grid grid-cols-2 md:flex md:flex-wrap justify-center gap-2 md:gap-4 mb-4">
+                    <button onClick={() => setFilterType('all')} className={`px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg ${filterType === 'all' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Todos</button>
+                    <button onClick={() => setFilterType('rent_seasonal')} className={`px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg ${filterType === 'rent_seasonal' ? 'bg-green-600 text-white' : 'bg-white text-green-600 border border-ocean-200'}`}>Temporada</button>
+                    <button onClick={() => setFilterType('rent_longterm')} className={`px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg ${filterType === 'rent_longterm' ? 'bg-purple-600 text-white' : 'bg-white text-purple-600 border border-ocean-200'}`}>Anual</button>
+                    <button onClick={() => setFilterType('sale')} className={`px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg ${filterType === 'sale' ? 'bg-blue-600 text-white' : 'bg-white text-blue-600 border border-ocean-200'}`}>Comprar</button>
                  </div>
                  <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-ocean-100 max-w-4xl mx-auto flex flex-col md:flex-row gap-3 items-center">
                     <div className="relative flex-1 w-full"><MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/><input className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" placeholder="Bairro..." value={locationFilter} onChange={e => setLocationFilter(e.target.value)}/></div>

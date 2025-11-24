@@ -1,5 +1,5 @@
 
-export type PropertyType = 'sale' | 'rent_seasonal';
+export type PropertyType = 'sale' | 'rent_seasonal' | 'rent_longterm';
 
 export interface Property {
   id: string;

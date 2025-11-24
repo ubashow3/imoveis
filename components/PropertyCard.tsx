@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Property } from '../types';
-import { MapPin, Bed, Bath, Expand, Heart, Image as ImageIcon, Users } from 'lucide-react';
+import { MapPin, Bed, Bath, Expand, Heart, Image as ImageIcon, Users, Key } from 'lucide-react';
 
 interface PropertyCardProps {
   property: Property;
@@ -17,6 +17,24 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
     ? property.images[0] 
     : 'https://via.placeholder.com/800x600?text=Sem+Foto';
 
+  const getTypeLabel = () => {
+    switch(property.type) {
+      case 'rent_seasonal': return 'Temporada';
+      case 'rent_longterm': return 'Locação Definitiva';
+      case 'sale': return 'Venda';
+      default: return 'Venda';
+    }
+  };
+
+  const getTypeColor = () => {
+    switch(property.type) {
+      case 'rent_seasonal': return 'bg-green-600';
+      case 'rent_longterm': return 'bg-purple-600';
+      case 'sale': return 'bg-ocean-600';
+      default: return 'bg-ocean-600';
+    }
+  };
+
   return (
     <div 
       className="bg-card rounded-xl shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300 cursor-pointer group border border-ocean-100"
@@ -28,8 +46,8 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
           alt={property.title} 
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
         />
-        <div className={`absolute top-4 left-4 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${property.type === 'rent_seasonal' ? 'bg-green-600' : 'bg-ocean-600'}`}>
-          {property.type === 'sale' ? 'Venda' : 'Temporada'}
+        <div className={`absolute top-4 left-4 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${getTypeColor()}`}>
+          {getTypeLabel()}
         </div>
         
         <div className="absolute bottom-4 right-4 bg-black/60 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 backdrop-blur-sm">
@@ -49,9 +67,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
         
         <h3 className="text-xl font-bold text-main mb-2 truncate">{property.title}</h3>
         
-        <div className="text-2xl font-bold text-ocean-600 mb-4">
+        <div className={`text-2xl font-bold mb-4 ${property.type === 'rent_longterm' ? 'text-purple-600' : 'text-ocean-600'}`}>
           {formatPrice(property.price)}
           {property.type === 'rent_seasonal' && <span className="text-sm text-muted font-normal"> /dia</span>}
+          {property.type === 'rent_longterm' && <span className="text-sm text-muted font-normal"> /mês</span>}
         </div>
 
         <div className="flex justify-between border-t border-ocean-100 pt-4 text-muted">
@@ -63,7 +82,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
             <Bath size={18} />
             <span className="text-sm">{property.bathrooms}</span>
           </div>
-          {/* Se for temporada, mostra Capacidade em vez de Área se houver info */}
+          {/* Se for temporada, mostra Capacidade. Se for Definitiva ou Venda, mostra Área */}
           {property.type === 'rent_seasonal' && property.max_guests ? (
             <div className="flex items-center gap-1 text-green-600 font-medium" title="Acomoda até">
               <Users size={18} />
