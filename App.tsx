@@ -215,6 +215,11 @@ const INITIAL_SETTINGS: SiteSettings = {
 const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
   const [imgError, setImgError] = useState(false);
 
+  // RESETAR erro de imagem se a URL mudar (ex: upload novo)
+  useEffect(() => {
+    setImgError(false);
+  }, [settings.logoUrl]);
+
   return (
     <footer className="bg-ocean-900 text-ocean-50 pt-12 pb-6 mt-12 transition-colors duration-300">
       <div className="container mx-auto px-4">
