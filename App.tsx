@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
@@ -220,6 +221,14 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
     setImgError(false);
   }, [settings.logoUrl]);
 
+  // Helper para links sociais
+  const getSocialLink = (value: string, baseUrl: string) => {
+    if (!value) return '#';
+    if (value.startsWith('http')) return value;
+    const clean = value.replace(/^@|^\//, '');
+    return `${baseUrl}/${clean}`;
+  };
+
   return (
     <footer className="bg-ocean-900 text-ocean-50 pt-12 pb-6 mt-12 transition-colors duration-300">
       <div className="container mx-auto px-4">
@@ -257,11 +266,11 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
           <div>
             <h4 className="font-bold text-lg mb-4 text-ocean-300">Redes Sociais</h4>
             <div className="flex gap-4">
-              <a href="#" className="bg-ocean-800 p-3 rounded-full hover:bg-ocean-600 text-white transition-colors"><Instagram size={20}/></a>
-              <a href="#" className="bg-ocean-800 p-3 rounded-full hover:bg-ocean-600 text-white transition-colors"><Facebook size={20}/></a>
+              <a href={getSocialLink(settings.social.instagram, 'https://instagram.com')} target="_blank" rel="noopener noreferrer" className="bg-ocean-800 p-3 rounded-full hover:bg-ocean-600 text-white transition-colors"><Instagram size={20}/></a>
+              <a href={getSocialLink(settings.social.facebook, 'https://facebook.com')} target="_blank" rel="noopener noreferrer" className="bg-ocean-800 p-3 rounded-full hover:bg-ocean-600 text-white transition-colors"><Facebook size={20}/></a>
             </div>
             <div className="mt-6">
-               <button className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-full font-bold w-full md:w-auto flex items-center justify-center gap-2 shadow-lg transform hover:scale-105 transition-all">
+               <button onClick={() => window.open(`https://wa.me/${(settings.contact.bookingPhone || settings.contact.phone).replace(/\D/g, '')}`, '_blank')} className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-full font-bold w-full md:w-auto flex items-center justify-center gap-2 shadow-lg transform hover:scale-105 transition-all">
                  <Phone size={18}/> WhatsApp
                </button>
             </div>
@@ -703,12 +712,14 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
         </div>
         <div className="space-y-4">
            <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100">
-              <h3 className="font-bold mb-4 flex items-center gap-2"><Phone size={18}/> Contato</h3>
+              <h3 className="font-bold mb-4 flex items-center gap-2"><Phone size={18}/> Contato & Social</h3>
               <input className="w-full p-2 border rounded mb-3" placeholder="Endereço" value={local.contact.address} onChange={e => setLocal({ ...local, contact: { ...local.contact, address: e.target.value } })} />
               <input className="w-full p-2 border rounded mb-3" placeholder="Telefone Principal" value={local.contact.phone} onChange={e => setLocal({ ...local, contact: { ...local.contact, phone: maskPhone(e.target.value) } })} />
               <input className="w-full p-2 border rounded mb-3" placeholder="WhatsApp Reservas" value={local.contact.bookingPhone || ''} onChange={e => setLocal({ ...local, contact: { ...local.contact, bookingPhone: maskPhone(e.target.value) } })} />
               <input className="w-full p-2 border rounded mb-3" placeholder="Email" value={local.contact.email} onChange={e => setLocal({ ...local, contact: { ...local.contact, email: e.target.value } })} />
-              <input className="w-full p-2 border rounded mb-3" placeholder="Instagram" value={local.social.instagram} onChange={e => setLocal({ ...local, social: { ...local.social, instagram: e.target.value } })} />
+              <input className="w-full p-2 border rounded mb-3" placeholder="Horário de Atendimento (Ex: Seg-Sex 9h-18h)" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
+              <input className="w-full p-2 border rounded mb-3" placeholder="Instagram (Ex: @imobiliaria)" value={local.social.instagram} onChange={e => setLocal({ ...local, social: { ...local.social, instagram: e.target.value } })} />
+              <input className="w-full p-2 border rounded mb-3" placeholder="Facebook (URL ou Nome)" value={local.social.facebook} onChange={e => setLocal({ ...local, social: { ...local.social, facebook: e.target.value } })} />
            </div>
         </div>
       </div>
@@ -743,7 +754,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.12 - Carregamento Animado");
+    console.log("App V.3.13 - Social & Hours Edit");
     // Tenta carregar do cache local primeiro
     const cachedSettings = localStorage.getItem('site_settings_cache');
     if (cachedSettings) {
@@ -906,7 +917,7 @@ const AppContent: React.FC = () => {
             {settings.logoUrl && !logoFailed ? (
                <img src={settings.logoUrl} className="h-10 w-auto md:h-12" onError={() => setLogoFailed(true)} />
             ) : <UbatubaLogo className="h-10 w-10 md:h-12 md:w-12" />}
-            <span className="hidden md:block text-ocean-800">{settings.siteName}</span>
+            <span className="text-sm md:text-xl text-ocean-800">{settings.siteName}</span>
          </div>
          <div className="flex gap-2">
            {view === ViewState.HOME ? (
