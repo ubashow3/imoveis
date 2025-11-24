@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users, Key
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users, Key, ShieldCheck
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -473,6 +473,12 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                </div>
              ) : (
                <div className="mb-2">
+                 {isLongTerm && (
+                    <div className="bg-purple-50 p-4 rounded-xl mb-4 border border-purple-100 text-left">
+                       <h4 className="font-bold text-purple-800 mb-2 flex items-center gap-2"><FileText size={18}/> Gestão Completa</h4>
+                       <p className="text-sm text-purple-700 leading-relaxed">Cuidamos de toda a papelada, verificação de fiador e contrato para garantir sua segurança e tranquilidade.</p>
+                    </div>
+                 )}
                  <button onClick={handleBook} className={`w-full ${isLongTerm ? 'bg-purple-600 hover:bg-purple-700' : 'bg-ocean-600 hover:bg-ocean-700'} text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-transform`}><Phone size={24} /> Falar com Corretor</button>
                </div>
              )}
