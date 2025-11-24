@@ -6,10 +6,10 @@ import { supabase } from './services/supabaseClient';
 import { PropertyCard } from './components/PropertyCard';
 import { 
   LayoutDashboard, Plus, Settings, Phone, Palette, Save, Trash2, 
-  Image as ImageIcon, Edit, UserCircle, Globe, Database,
+  Image as ImageIcon, Edit, UserCircle, Globe,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -220,6 +220,54 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
         </div>
       </div>
     </footer>
+  );
+};
+
+// LOGIN MODAL
+const AdminLoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: () => void }> = ({ isOpen, onClose, onLogin }) => {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState(false);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (password === 'fechadura') {
+      onLogin();
+      setPassword('');
+      setError(false);
+    } else {
+      setError(true);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full relative animate-in fade-in zoom-in duration-200">
+        <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24}/></button>
+        <div className="flex flex-col items-center mb-6">
+          <div className="bg-ocean-100 p-4 rounded-full mb-4 text-ocean-600"><Lock size={32}/></div>
+          <h2 className="text-2xl font-bold text-ocean-800">Área Restrita</h2>
+          <p className="text-sm text-gray-500 text-center">Digite a senha de administrador para acessar o painel.</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+             <input 
+               type="password" 
+               className={`w-full p-3 border rounded-lg text-center font-bold tracking-widest text-lg outline-none focus:ring-2 ${error ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-ocean-200 focus:ring-ocean-200'}`}
+               placeholder="Senha"
+               value={password}
+               onChange={e => { setPassword(e.target.value); setError(false); }}
+               autoFocus
+             />
+             {error && <p className="text-red-500 text-xs text-center mt-2 font-bold">Senha incorreta. Tente novamente.</p>}
+          </div>
+          <button type="submit" className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg">
+             <LogIn size={20}/> Entrar
+          </button>
+        </form>
+      </div>
+    </div>
   );
 };
 
@@ -572,7 +620,8 @@ const AppContent: React.FC = () => {
   const [logoFailed, setLogoFailed] = useState(false);
   const [showDbSetup, setShowDbSetup] = useState(false);
   
-  // -- ESTADOS DE BUSCA --
+  // -- ESTADOS DE LOGIN E BUSCA --
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal'>('all');
   const [locationFilter, setLocationFilter] = useState('');
   const [priceRange, setPriceRange] = useState<{max: number}>({max: 0});
@@ -697,37 +746,6 @@ const AppContent: React.FC = () => {
     }
   };
 
-  const handleSeed = async () => {
-    const SAMPLE_PROPERTIES = [
-      {
-        title: "Casa de Alto Padrão em Itamambuca",
-        description: "Espetacular casa pé na areia com piscina.",
-        location: "Itamambuca, Ubatuba",
-        price: 3500,
-        type: "rent_seasonal",
-        bedrooms: 5,
-        bathrooms: 6,
-        area: 450,
-        features: ["Piscina", "Churrasqueira", "Wi-Fi"],
-        images: ["https://images.unsplash.com/photo-1600596542815-60c37c6525fa?auto=format&fit=crop&w=800"],
-        views: 120,
-        featured: true,
-        active: true
-      }
-    ];
-
-    setIsLoading(true);
-    const { error } = await supabase.from('properties').insert(SAMPLE_PROPERTIES);
-    if (error) {
-      alert("Erro ao criar dados: " + error.message);
-      if (error.code === '42P01') setShowDbSetup(true);
-    } else {
-      alert("Dados de teste criados!");
-      fetchProperties();
-    }
-    setIsLoading(false);
-  };
-
   // -- FILTRAGEM --
   const visibleProperties = properties.filter(p => {
     if (view === ViewState.ADMIN_PROPERTIES) return true; // Admin vê tudo
@@ -754,6 +772,14 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-page font-sans text-main flex flex-col">
+      <AdminLoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)} 
+        onLogin={() => {
+           setShowLoginModal(false);
+           setView(ViewState.ADMIN_PROPERTIES);
+        }}
+      />
       <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100 h-16 flex items-center justify-between px-2 md:px-4 shrink-0">
          <div className="flex items-center gap-3 font-bold text-xl cursor-pointer" onClick={() => setView(ViewState.HOME)}>
             {settings.logoUrl && !logoFailed ? (
@@ -763,7 +789,7 @@ const AppContent: React.FC = () => {
          </div>
          <div className="flex gap-2">
            {view === ViewState.HOME ? (
-             <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
+             <button onClick={() => setShowLoginModal(true)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
                 <UserCircle size={16}/> Área Admin
              </button>
            ) : (
@@ -865,7 +891,6 @@ const AppContent: React.FC = () => {
               <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 sticky top-20 h-fit z-10 bg-page">
                   <button className="flex-1 bg-ocean-600 text-white p-3 rounded text-left font-bold flex gap-2"><LayoutDashboard size={18}/> Imóveis</button>
                   <button onClick={() => setView(ViewState.ADMIN_SETTINGS)} className="flex-1 bg-white text-muted p-3 rounded text-left hover:bg-gray-50 flex gap-2"><Settings size={18}/> Configurações</button>
-                  <button onClick={handleSeed} className="flex-1 bg-purple-100 text-purple-700 p-3 rounded text-left hover:bg-purple-200 flex gap-2"><Database size={18}/> Gerar Teste</button>
               </div>
               
               <div className="flex-1">
