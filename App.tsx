@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
@@ -214,13 +213,26 @@ const INITIAL_SETTINGS: SiteSettings = {
 // --- COMPONENTES ---
 
 const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
+  const [imgError, setImgError] = useState(false);
+
   return (
     <footer className="bg-ocean-900 text-ocean-50 pt-12 pb-6 mt-12 transition-colors duration-300">
       <div className="container mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
           <div>
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <div className="bg-white rounded-full p-1"><UbatubaLogo className="h-8 w-8 text-ocean-600"/></div>
+              <div className="bg-white rounded-full p-1 h-10 w-10 flex items-center justify-center overflow-hidden">
+                {settings.logoUrl && !imgError ? (
+                  <img 
+                    src={settings.logoUrl} 
+                    className="h-full w-full object-contain" 
+                    alt="Logo Footer"
+                    onError={() => setImgError(true)}
+                  />
+                ) : (
+                  <UbatubaLogo className="h-8 w-8 text-ocean-600"/>
+                )}
+              </div>
               {settings.siteName}
             </h3>
             <p className="text-ocean-200 text-sm leading-relaxed">
@@ -1051,7 +1063,7 @@ const AppContent: React.FC = () => {
       </main>
 
       {/* FOOTER */}
-      {view === ViewState.HOME && <Footer settings={settings} />}
+      {(view === ViewState.HOME || view === ViewState.DETAILS) && <Footer settings={settings} />}
     </div>
   );
 };
