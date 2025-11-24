@@ -1,16 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
 
-// Função segura para pegar a chave (evita crash se process não existir)
-const getApiKey = () => {
-  // No Vercel ou ambiente node
-  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-    return process.env.API_KEY;
-  }
-  // Fallback vazio (o Gemini vai dar erro de auth, mas o site não trava)
-  return "";
-};
-
 export const generatePropertyDescription = async (
   features: string[],
   location: string,
@@ -18,13 +8,7 @@ export const generatePropertyDescription = async (
   bedrooms: number
 ): Promise<string> => {
   try {
-    const key = getApiKey();
-    if (!key) {
-      console.warn("Gemini: API Key não encontrada.");
-      return "Descrição automática indisponível (Chave de API faltando).";
-    }
-
-    const ai = new GoogleGenAI({ apiKey: key });
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
     const prompt = `
       Atue como um corretor de imóveis experiente especializado em imóveis de luxo no litoral.

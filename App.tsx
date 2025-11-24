@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
