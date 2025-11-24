@@ -615,7 +615,7 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
   };
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> Configurações</h2><button onClick={() => window.open('https://supabase.com/dashboard', '_blank')} className="text-sm bg-gray-800 text-white px-3 py-1 rounded">Ajuda DB</button></div>
+      <div className="flex items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> Configurações</h2></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div className="space-y-4 bg-white p-6 rounded-xl border border-ocean-100">
            <h3 className="font-bold mb-4 flex items-center gap-2"><Palette/> Aparência</h3>
@@ -637,8 +637,7 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
            <label className="block text-sm mb-1">Horários</label><input className="w-full p-2 border rounded mb-3" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
         </div>
       </div>
-      <div className="mt-6 flex justify-between">
-         <button onClick={() => alert(SQL_SETUP_CODE)} className="text-red-500 text-xs font-bold underline">Ver SQL de Atualização</button>
+      <div className="mt-6 flex justify-end">
          <button onClick={() => onSave(local)} className="bg-ocean-600 text-white py-3 px-8 rounded-xl font-bold hover:bg-ocean-700 flex gap-2"><Save/> Salvar</button>
       </div>
     </div>
