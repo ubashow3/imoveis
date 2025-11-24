@@ -162,6 +162,19 @@ const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
+// --- LOADING COMPONENT (LOOPING) ---
+const LoadingSpinner: React.FC = () => (
+  <div className="flex flex-col items-center justify-center min-h-[50vh] w-full animate-in fade-in">
+    <div className="relative mb-4">
+      <div className="w-16 h-16 border-4 border-ocean-100 border-t-ocean-600 rounded-full animate-spin"></div>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <UbatubaLogo className="w-6 h-6 text-ocean-600 opacity-50" />
+      </div>
+    </div>
+    <p className="text-ocean-600 font-bold animate-pulse text-sm uppercase tracking-widest">Carregando...</p>
+  </div>
+);
+
 const INITIAL_SETTINGS: SiteSettings = {
   siteName: 'Aluga-se Ubatuba',
   logoUrl: '/img/LOGO_LEGAL.png', 
@@ -636,7 +649,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.11 - Visual Corrigido");
+    console.log("App V.3.12 - Carregamento Animado");
     // Tenta carregar do cache local primeiro
     const cachedSettings = localStorage.getItem('site_settings_cache');
     if (cachedSettings) {
@@ -866,19 +879,25 @@ const AppContent: React.FC = () => {
                </div>
             </div>
 
-            <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {visibleProperties.map(p => (
-                <div key={p.id} className="relative group">
-                   {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
-                   <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
+            <div className="container mx-auto px-4 py-8">
+              {isLoading ? (
+                <LoadingSpinner />
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                  {visibleProperties.map(p => (
+                    <div key={p.id} className="relative group">
+                      {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
+                      <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
+                    </div>
+                  ))}
+                  {visibleProperties.length === 0 && !dbError && (
+                    <div className="col-span-full text-center py-12 text-muted">
+                        <Filter size={48} className="mx-auto mb-4 text-ocean-200" />
+                        <p className="text-xl">Nenhum imóvel encontrado com estes filtros.</p>
+                        <button onClick={() => { setFilterType('all'); setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="mt-4 text-ocean-600 font-bold hover:underline">Limpar Filtros</button>
+                    </div>
+                  )}
                 </div>
-              ))}
-              {visibleProperties.length === 0 && !isLoading && !dbError && (
-                 <div className="col-span-full text-center py-12 text-muted">
-                    <Filter size={48} className="mx-auto mb-4 text-ocean-200" />
-                    <p className="text-xl">Nenhum imóvel encontrado com estes filtros.</p>
-                    <button onClick={() => { setFilterType('all'); setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="mt-4 text-ocean-600 font-bold hover:underline">Limpar Filtros</button>
-                 </div>
               )}
             </div>
           </>
@@ -898,28 +917,32 @@ const AppContent: React.FC = () => {
                    <h1 className="text-2xl font-bold text-ocean-800">Meus Imóveis</h1>
                    <button onClick={() => { setSelectedProperty(null); setView(ViewState.ADMIN_FORM); }} className="bg-ocean-600 text-white px-4 py-2 rounded-full hover:bg-ocean-700 flex items-center gap-2 font-bold shadow-lg"><Plus size={20}/> Novo Imóvel</button>
                 </div>
-                <div className="grid grid-cols-1 gap-4">
-                   {properties.map(p => (
-                     <div key={p.id} className={`bg-white p-4 rounded-lg shadow flex justify-between items-center ${p.active === false ? 'opacity-60 bg-gray-50' : ''} ${p.featured ? 'border-l-4 border-yellow-400' : ''}`}>
-                        <div className="flex items-center gap-4">
-                           <img src={p.images[0] || 'https://via.placeholder.com/50'} className="w-16 h-16 object-cover rounded" />
-                           <div>
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-bold">{p.title}</h3>
-                                {p.active === false && <span className="text-xs bg-gray-200 text-gray-600 px-2 rounded">Inativo</span>}
-                                {p.featured && <Star size={14} className="text-yellow-500 fill-yellow-500"/>}
-                              </div>
-                              <p className="text-sm text-muted">{p.location}</p>
-                           </div>
-                        </div>
-                        <div className="flex gap-2">
-                           <button onClick={() => { setSelectedProperty(p); setView(ViewState.ADMIN_FORM); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit size={18}/></button>
-                           <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={18}/></button>
-                        </div>
-                     </div>
-                   ))}
-                   {properties.length === 0 && <div className="text-center text-muted py-8">Nenhum imóvel cadastrado.</div>}
-                </div>
+                {isLoading ? (
+                  <LoadingSpinner />
+                ) : (
+                  <div className="grid grid-cols-1 gap-4">
+                    {properties.map(p => (
+                      <div key={p.id} className={`bg-white p-4 rounded-lg shadow flex justify-between items-center ${p.active === false ? 'opacity-60 bg-gray-50' : ''} ${p.featured ? 'border-l-4 border-yellow-400' : ''}`}>
+                          <div className="flex items-center gap-4">
+                            <img src={p.images[0] || 'https://via.placeholder.com/50'} className="w-16 h-16 object-cover rounded" />
+                            <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="font-bold">{p.title}</h3>
+                                  {p.active === false && <span className="text-xs bg-gray-200 text-gray-600 px-2 rounded">Inativo</span>}
+                                  {p.featured && <Star size={14} className="text-yellow-500 fill-yellow-500"/>}
+                                </div>
+                                <p className="text-sm text-muted">{p.location}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => { setSelectedProperty(p); setView(ViewState.ADMIN_FORM); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit size={18}/></button>
+                            <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={18}/></button>
+                          </div>
+                      </div>
+                    ))}
+                    {properties.length === 0 && <div className="text-center text-muted py-8">Nenhum imóvel cadastrado.</div>}
+                  </div>
+                )}
               </div>
            </div>
         )}
