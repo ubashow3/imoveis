@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
@@ -8,7 +9,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe, Database,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Search, Calendar, DollarSign
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -71,7 +72,6 @@ const uploadImage = async (file: File): Promise<string | null> => {
     return data.publicUrl;
   } catch (error: any) {
     console.error("Erro upload:", error);
-    // Erro comum: Resposta não é JSON (500 Internal Server Error)
     if (error instanceof SyntaxError || error.message?.includes('Unexpected token') || error.message?.includes('JSON')) {
        alert('Erro Crítico no Storage: O Bucket "images" parece não existir ou está sem permissão. Vá em Configurações > Gerar Teste e copie o novo SQL para corrigir.');
     } else {
@@ -81,7 +81,7 @@ const uploadImage = async (file: File): Promise<string | null> => {
   }
 };
 
-// --- SQL SETUP (ATUALIZADO PARA STORAGE E MIGRAÇÃO) ---
+// --- SQL SETUP ---
 const SQL_SETUP_CODE = `-- 1. TABELAS
 create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
@@ -102,7 +102,7 @@ create table if not exists properties (
   owner_notes text
 );
 
--- Migração: Adiciona colunas se faltarem (para quem já tinha a tabela)
+-- Migração
 do $$
 begin
   if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='active') then
@@ -123,30 +123,26 @@ create table if not exists site_settings (
 );
 insert into site_settings (id, data) values (1, '{}'::jsonb) on conflict (id) do nothing;
 
--- 2. PERMISSÕES (RLS)
+-- 2. PERMISSÕES
 alter table properties enable row level security;
 alter table site_settings enable row level security;
 
--- Limpeza de políticas antigas
 drop policy if exists "Public Access" on properties;
 drop policy if exists "Public Settings" on site_settings;
 
--- Novas Regras
 create policy "Public Access" on properties for all using (true) with check (true);
 create policy "Public Settings" on site_settings for all using (true) with check (true);
 
--- 3. STORAGE (IMAGENS)
+-- 3. STORAGE
 insert into storage.buckets (id, name, public) values ('images', 'images', true) on conflict (id) do nothing;
 
 grant all on schema storage to postgres, anon, authenticated, service_role;
 grant all on table storage.objects to postgres, anon, authenticated, service_role;
 
--- Limpa regras antigas do Storage para evitar conflito (Erro 42710)
 drop policy if exists "Public Views" on storage.objects;
 drop policy if exists "Public Uploads" on storage.objects;
 drop policy if exists "Public Deletes" on storage.objects;
 
--- Recria regras do Storage
 create policy "Public Views" on storage.objects for select using ( bucket_id = 'images' );
 create policy "Public Uploads" on storage.objects for insert with check ( bucket_id = 'images' );
 create policy "Public Deletes" on storage.objects for delete using ( bucket_id = 'images' );
@@ -193,8 +189,8 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
               {settings.siteName}
             </h3>
             <p className="text-ocean-200 text-sm leading-relaxed">
-              A sua melhor opção para encontrar o imóvel dos sonhos no litoral. 
-              Venda e Aluguel de Temporada com segurança e conforto.
+              Encontre o seu imóvel ideal no litoral. 
+              Venda e Aluguel de Temporada com total segurança.
             </p>
           </div>
           <div>
@@ -214,7 +210,7 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
             </div>
             <div className="mt-6">
                <button className="bg-green-600 hover:bg-green-700 text-white py-2 px-6 rounded-full font-bold w-full md:w-auto flex items-center justify-center gap-2 shadow-lg transform hover:scale-105 transition-all">
-                 <Phone size={18}/> Falar no WhatsApp
+                 <Phone size={18}/> WhatsApp
                </button>
             </div>
           </div>
@@ -239,8 +235,7 @@ const DatabaseSetup: React.FC = () => {
       <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
       <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização de Banco de Dados</h1>
       <p className="text-muted max-w-2xl mb-8">
-        Detectamos que seu banco precisa de atualização (Storage de Imagens).<br/>
-        Copie o SQL abaixo e rode no Supabase para garantir que o upload funcione.
+        Para que as fotos e novos campos funcionem, execute este SQL no Supabase.
       </p>
       <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
         <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
@@ -249,7 +244,7 @@ const DatabaseSetup: React.FC = () => {
         </div>
         <pre className="p-6 overflow-x-auto text-sm text-green-400 font-mono"><code>{SQL_SETUP_CODE}</code></pre>
       </div>
-      <button onClick={() => window.location.reload()} className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 flex items-center gap-2"><RefreshCw size={20} /> Já Rodei o SQL, Recarregar</button>
+      <button onClick={() => window.location.reload()} className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 flex items-center gap-2"><RefreshCw size={20} /> Já Atualizei, Recarregar</button>
     </div>
   );
 };
@@ -260,7 +255,9 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   const [end, setEnd] = useState('');
   const images = property.images && property.images.length > 0 ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
   
-  // Cálculo de diárias
+  // Lógica: Se não for venda explícita, assume temporada (para garantir que calendário apareça)
+  const isSeasonal = property.type !== 'sale';
+  
   const getDays = () => {
     if (!start || !end) return 0;
     const s = new Date(start);
@@ -277,7 +274,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
     let msg = '';
     const phone = bookingPhone.replace(/\D/g, '');
 
-    if (property.type === 'rent_seasonal') {
+    if (isSeasonal) {
       if (!start || !end) {
         alert("Por favor, selecione as datas de entrada e saída.");
         return;
@@ -301,90 +298,104 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   return (
     <div className="container mx-auto px-4 py-6">
       <button onClick={onBack} className="flex items-center text-muted hover:text-ocean-600 mb-4"><ArrowLeft size={20} className="mr-2"/> Voltar</button>
-      <div className="relative h-[300px] md:h-[500px] bg-gray-100 rounded-2xl overflow-hidden mb-8 group">
+      <div className="relative h-[300px] md:h-[500px] bg-gray-100 rounded-2xl overflow-hidden mb-8 group shadow-lg">
         <img src={images[imgIdx]} alt={property.title} className="w-full h-full object-cover" />
         {images.length > 1 && (
           <>
-            <button onClick={() => setImgIdx((prev) => (prev - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full text-white"><ChevronLeft /></button>
-            <button onClick={() => setImgIdx((prev) => (prev + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/30 p-2 rounded-full text-white"><ChevronRight /></button>
-            <div className="absolute bottom-4 right-4 bg-black/60 text-white px-3 py-1 rounded-full text-sm">{imgIdx + 1} / {images.length}</div>
+            <button onClick={() => setImgIdx((prev) => (prev - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white transition-colors"><ChevronLeft size={24}/></button>
+            <button onClick={() => setImgIdx((prev) => (prev + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white transition-colors"><ChevronRight size={24}/></button>
+            <div className="absolute bottom-6 right-6 bg-black/60 text-white px-4 py-1 rounded-full text-sm font-medium">{imgIdx + 1} / {images.length}</div>
           </>
         )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <div className="flex items-center gap-2 mb-2">
-            <h1 className="text-3xl font-bold text-main">{property.title}</h1>
-            {property.featured && <Star size={24} className="text-yellow-500 fill-yellow-500"/>}
+          <div className="flex flex-col gap-2 mb-4">
+            <span className={`w-fit px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide text-white ${isSeasonal ? 'bg-green-500' : 'bg-blue-500'}`}>
+               {isSeasonal ? 'Aluguel de Temporada' : 'Venda'}
+            </span>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-main leading-tight">{property.title}</h1>
+              {property.featured && <Star size={24} className="text-yellow-500 fill-yellow-500 flex-shrink-0"/>}
+            </div>
+            <div className="flex items-center text-muted"><MapPin size={18} className="mr-1" /> {property.location}</div>
           </div>
-          <div className="flex items-center text-muted mt-2"><MapPin size={18} className="mr-1" /> {property.location}</div>
-          <div className="flex gap-6 border-y border-ocean-100 py-6 my-6">
-             <div className="text-center"><Bed className="mx-auto text-ocean-500"/> <b>{property.bedrooms}</b></div>
-             <div className="text-center"><Bath className="mx-auto text-ocean-500"/> <b>{property.bathrooms}</b></div>
-             <div className="text-center"><Expand className="mx-auto text-ocean-500"/> <b>{property.area} m²</b></div>
+          
+          <div className="flex gap-4 md:gap-8 border-y border-ocean-100 py-6 my-6 justify-center md:justify-start">
+             <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Bed/> {property.bedrooms}</div><span className="text-xs text-muted uppercase">Quartos</span></div>
+             <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Bath/> {property.bathrooms}</div><span className="text-xs text-muted uppercase">Banheiros</span></div>
+             <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Expand/> {property.area}</div><span className="text-xs text-muted uppercase">m² Úteis</span></div>
           </div>
-          <p className="whitespace-pre-line text-muted mb-8">{property.description}</p>
+          
+          <h3 className="text-lg font-bold mb-3">Sobre este imóvel</h3>
+          <p className="whitespace-pre-line text-muted mb-8 leading-relaxed text-lg">{property.description}</p>
+          
+          <h3 className="text-lg font-bold mb-3">Características</h3>
           <div className="flex flex-wrap gap-2 mb-8">
-            {property.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center"><CheckCircle size={14} className="mr-1"/>{f}</span>)}
+            {property.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-4 py-2 rounded-lg text-sm flex items-center font-medium"><CheckCircle size={16} className="mr-2 text-ocean-500"/>{f}</span>)}
           </div>
         </div>
         
-        {/* CARD DE PREÇO E RESERVA */}
+        {/* PAINEL DE RESERVA / CONTATO */}
         <div className="lg:col-span-1">
-          <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-xl sticky top-24">
-             <div className="mb-6 pb-6 border-b border-ocean-100">
-                <span className="text-3xl font-bold text-ocean-600">
+          <div className="bg-white border border-ocean-200 rounded-2xl p-6 shadow-xl sticky top-24">
+             <div className="mb-6 pb-6 border-b border-ocean-100 text-center">
+                <span className="text-4xl font-extrabold text-ocean-600 block mb-1">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
                 </span>
-                {property.type === 'rent_seasonal' && <span className="text-muted font-normal"> / noite</span>}
+                <span className="text-muted text-sm uppercase font-bold tracking-wide">{isSeasonal ? 'Valor por Noite' : 'Valor de Venda'}</span>
              </div>
              
-             {property.type === 'rent_seasonal' ? (
-               <div className="mb-6">
-                 <div className="grid grid-cols-2 gap-2 mb-4">
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-muted mb-1">Check-in</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 border border-ocean-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500" 
-                        value={start} 
-                        onChange={e => setStart(e.target.value)} 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold uppercase text-muted mb-1">Check-out</label>
-                      <input 
-                        type="date" 
-                        className="w-full p-2 border border-ocean-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500" 
-                        value={end} 
-                        onChange={e => setEnd(e.target.value)} 
-                      />
+             {isSeasonal ? (
+               <div className="mb-2">
+                 <div className="bg-ocean-50 p-4 rounded-xl mb-4 border border-ocean-100">
+                    <h4 className="font-bold text-ocean-800 mb-3 flex items-center gap-2"><Calendar size={18}/> Planeje sua Estadia</h4>
+                    <div className="space-y-3">
+                       <div>
+                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Entrada (Check-in)</label>
+                          <input 
+                            type="date" 
+                            className="w-full p-3 border border-ocean-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500 shadow-sm" 
+                            value={start} 
+                            onChange={e => setStart(e.target.value)} 
+                          />
+                       </div>
+                       <div>
+                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Saída (Check-out)</label>
+                          <input 
+                            type="date" 
+                            className="w-full p-3 border border-ocean-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500 shadow-sm" 
+                            value={end} 
+                            onChange={e => setEnd(e.target.value)} 
+                          />
+                       </div>
                     </div>
                  </div>
                  
                  {days > 0 && (
-                   <div className="bg-ocean-50 rounded-lg p-4 mb-4">
-                      <div className="flex justify-between items-center mb-2 text-sm">
+                   <div className="bg-white border border-ocean-200 rounded-lg p-4 mb-4 shadow-sm">
+                      <div className="flex justify-between items-center mb-2 text-sm text-gray-600">
                         <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)} x {days} noites</span>
                         <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice)}</span>
                       </div>
-                      <div className="border-t border-ocean-200 pt-2 mt-2 flex justify-between items-center font-bold text-lg text-ocean-800">
+                      <div className="border-t border-ocean-100 pt-3 mt-2 flex justify-between items-center font-bold text-xl text-ocean-800">
                         <span>Total</span>
                         <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice)}</span>
                       </div>
                    </div>
                  )}
                  
-                 <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105">
-                   <Phone size={20} /> Solicitar Reserva
+                 <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105 active:scale-95 text-lg">
+                   <Phone size={24} /> Reservar via WhatsApp
                  </button>
-                 <p className="text-xs text-center text-muted mt-3">Você não será cobrado ainda. A conversa continuará no WhatsApp.</p>
+                 <p className="text-xs text-center text-muted mt-3 px-4">Ao clicar, você será redirecionado para o WhatsApp com os detalhes da reserva.</p>
                </div>
              ) : (
-               <div className="mb-6">
-                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105">
-                   <Phone size={20} /> Contatar Corretor
+               <div className="mb-2">
+                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105 active:scale-95 text-lg">
+                   <Phone size={24} /> Falar com Corretor
                  </button>
+                 <p className="text-xs text-center text-muted mt-3">Tire suas dúvidas ou agende uma visita agora mesmo.</p>
                </div>
              )}
           </div>
@@ -575,8 +586,8 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.9 - SQL Blindado");
-    // Tenta carregar do cache local primeiro para evitar "flash" de cor errada
+    console.log("App V.3.11 - Visual Corrigido");
+    // Tenta carregar do cache local primeiro
     const cachedSettings = localStorage.getItem('site_settings_cache');
     if (cachedSettings) {
       try {
@@ -604,7 +615,6 @@ const AppContent: React.FC = () => {
         }
       } else if (data && data.data && Object.keys(data.data).length > 0) {
         setSettings({ ...INITIAL_SETTINGS, ...data.data });
-        // Atualiza o cache local
         localStorage.setItem('site_settings_cache', JSON.stringify({ ...INITIAL_SETTINGS, ...data.data }));
       }
     } catch (e) { 
@@ -651,7 +661,6 @@ const AppContent: React.FC = () => {
 
   const handleSaveSettings = async (newSettings: SiteSettings) => {
     setSettings(newSettings);
-    // Salva no cache local imediatamente
     localStorage.setItem('site_settings_cache', JSON.stringify(newSettings));
 
     const { error } = await supabase.from('site_settings').upsert({ id: 1, data: newSettings });
@@ -782,7 +791,7 @@ const AppContent: React.FC = () => {
                     <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
                  </div>
 
-                 {/* Busca Apurada (Filtros Finos) */}
+                 {/* Busca Apurada (Filtros Finos) - SEMPRE VISIVEL */}
                  <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-ocean-100 max-w-4xl mx-auto flex flex-col md:flex-row gap-3 items-center">
                     <div className="relative flex-1 w-full">
                        <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/>
