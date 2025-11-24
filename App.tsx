@@ -502,10 +502,11 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
         </div>
         <textarea placeholder="Descrição" rows={5} className="w-full p-2 border rounded" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
         <div className="flex gap-2 justify-end">
-          <button onClick={handleGenerateDesc} disabled={loading} className="flex items-center gap-2 text-ocean-600 bg-ocean-50 px-4 py-2 rounded hover:bg-ocean-100">
-             <Sparkles size={16} /> {loading ? 'Gerando...' : 'Gerar Descrição com IA'}
+          <button onClick={handleGenerateDesc} disabled={loading} className="flex items-center gap-2 text-ocean-600 bg-ocean-50 px-4 py-2 rounded hover:bg-ocean-100 border border-ocean-200">
+             <Sparkles size={16} className={loading ? 'animate-pulse text-purple-500' : 'text-purple-600'} /> 
+             {loading ? 'Criando Texto...' : 'Gerar Descrição com IA'}
           </button>
-          <button onClick={() => onSave(formData)} className="bg-ocean-600 text-white px-6 py-2 rounded hover:bg-ocean-700">Salvar Imóvel</button>
+          <button onClick={() => onSave(formData)} className="bg-ocean-600 text-white px-6 py-2 rounded hover:bg-ocean-700 shadow-md">Salvar Imóvel</button>
         </div>
       </div>
     </div>
@@ -686,8 +687,13 @@ const AppContent: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir?")) {
-      await supabase.from('properties').delete().eq('id', id);
-      fetchProperties();
+      const { error } = await supabase.from('properties').delete().eq('id', id);
+      if (error) {
+         alert("Erro ao excluir: " + error.message);
+      } else {
+         alert("Imóvel excluído com sucesso!");
+         fetchProperties();
+      }
     }
   };
 
