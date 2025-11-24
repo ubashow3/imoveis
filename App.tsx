@@ -8,7 +8,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe, Database,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Search, Calendar, DollarSign
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -127,7 +127,7 @@ insert into site_settings (id, data) values (1, '{}'::jsonb) on conflict (id) do
 alter table properties enable row level security;
 alter table site_settings enable row level security;
 
--- Limpeza
+-- Limpeza de políticas antigas
 drop policy if exists "Public Access" on properties;
 drop policy if exists "Public Settings" on site_settings;
 
@@ -139,11 +139,14 @@ create policy "Public Settings" on site_settings for all using (true) with check
 insert into storage.buckets (id, name, public) values ('images', 'images', true) on conflict (id) do nothing;
 
 grant all on schema storage to postgres, anon, authenticated, service_role;
+grant all on table storage.objects to postgres, anon, authenticated, service_role;
 
+-- Limpa regras antigas do Storage para evitar conflito (Erro 42710)
 drop policy if exists "Public Views" on storage.objects;
 drop policy if exists "Public Uploads" on storage.objects;
 drop policy if exists "Public Deletes" on storage.objects;
 
+-- Recria regras do Storage
 create policy "Public Views" on storage.objects for select using ( bucket_id = 'images' );
 create policy "Public Uploads" on storage.objects for insert with check ( bucket_id = 'images' );
 create policy "Public Deletes" on storage.objects for delete using ( bucket_id = 'images' );
@@ -257,17 +260,42 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   const [end, setEnd] = useState('');
   const images = property.images && property.images.length > 0 ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
   
-  const calcTotal = () => {
+  // Cálculo de diárias
+  const getDays = () => {
     if (!start || !end) return 0;
-    const diff = Math.ceil(Math.abs(new Date(end).getTime() - new Date(start).getTime()) / (1000 * 3600 * 24));
-    return diff * property.price;
+    const s = new Date(start);
+    const e = new Date(end);
+    const diff = e.getTime() - s.getTime();
+    const days = Math.ceil(diff / (1000 * 3600 * 24));
+    return days > 0 ? days : 0;
   };
+  
+  const days = getDays();
+  const totalPrice = days * property.price;
 
   const handleBook = () => {
-    const msg = property.type === 'rent_seasonal' 
-      ? `Olá! Gostaria de reservar "${property.title}" de ${start} a ${end}.` 
-      : `Olá! Tenho interesse em comprar "${property.title}".`;
-    window.open(`https://wa.me/${bookingPhone.replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`, '_blank');
+    let msg = '';
+    const phone = bookingPhone.replace(/\D/g, '');
+
+    if (property.type === 'rent_seasonal') {
+      if (!start || !end) {
+        alert("Por favor, selecione as datas de entrada e saída.");
+        return;
+      }
+      const formattedStart = new Date(start).toLocaleDateString('pt-BR');
+      const formattedEnd = new Date(end).toLocaleDateString('pt-BR');
+      const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice);
+      
+      msg = `Olá! Gostaria de reservar o imóvel *${property.title}*.\n\n` +
+            `📅 *Check-in:* ${formattedStart}\n` +
+            `📅 *Check-out:* ${formattedEnd}\n` +
+            `🌙 *Diárias:* ${days}\n` +
+            `💰 *Valor Total Estimado:* ${formattedTotal}`;
+    } else {
+      msg = `Olá! Tenho interesse em comprar o imóvel *${property.title}* que vi no site (R$ ${property.price}).`;
+    }
+    
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
   return (
@@ -300,20 +328,65 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
             {property.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center"><CheckCircle size={14} className="mr-1"/>{f}</span>)}
           </div>
         </div>
+        
+        {/* CARD DE PREÇO E RESERVA */}
         <div className="lg:col-span-1">
-          <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-lg sticky top-24">
-             <div className="mb-6 text-3xl font-bold text-ocean-600">
-                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
-                {property.type === 'rent_seasonal' && <span className="text-sm text-muted font-normal"> /dia</span>}
+          <div className="bg-card border border-ocean-200 rounded-2xl p-6 shadow-xl sticky top-24">
+             <div className="mb-6 pb-6 border-b border-ocean-100">
+                <span className="text-3xl font-bold text-ocean-600">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
+                </span>
+                {property.type === 'rent_seasonal' && <span className="text-muted font-normal"> / noite</span>}
              </div>
-             {property.type === 'rent_seasonal' && (
-               <div className="mb-6 space-y-4">
-                 <input type="date" className="w-full p-2 border rounded" value={start} onChange={e => setStart(e.target.value)} />
-                 <input type="date" className="w-full p-2 border rounded" value={end} onChange={e => setEnd(e.target.value)} />
-                 {start && end && <div className="bg-ocean-50 p-3 rounded font-bold text-center">Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calcTotal())}</div>}
+             
+             {property.type === 'rent_seasonal' ? (
+               <div className="mb-6">
+                 <div className="grid grid-cols-2 gap-2 mb-4">
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-muted mb-1">Check-in</label>
+                      <input 
+                        type="date" 
+                        className="w-full p-2 border border-ocean-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500" 
+                        value={start} 
+                        onChange={e => setStart(e.target.value)} 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold uppercase text-muted mb-1">Check-out</label>
+                      <input 
+                        type="date" 
+                        className="w-full p-2 border border-ocean-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500" 
+                        value={end} 
+                        onChange={e => setEnd(e.target.value)} 
+                      />
+                    </div>
+                 </div>
+                 
+                 {days > 0 && (
+                   <div className="bg-ocean-50 rounded-lg p-4 mb-4">
+                      <div className="flex justify-between items-center mb-2 text-sm">
+                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)} x {days} noites</span>
+                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice)}</span>
+                      </div>
+                      <div className="border-t border-ocean-200 pt-2 mt-2 flex justify-between items-center font-bold text-lg text-ocean-800">
+                        <span>Total</span>
+                        <span>{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice)}</span>
+                      </div>
+                   </div>
+                 )}
+                 
+                 <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105">
+                   <Phone size={20} /> Solicitar Reserva
+                 </button>
+                 <p className="text-xs text-center text-muted mt-3">Você não será cobrado ainda. A conversa continuará no WhatsApp.</p>
+               </div>
+             ) : (
+               <div className="mb-6">
+                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105">
+                   <Phone size={20} /> Contatar Corretor
+                 </button>
                </div>
              )}
-             <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2"><Phone size={20} /> Contatar</button>
           </div>
         </div>
       </div>
@@ -489,6 +562,9 @@ const AppContent: React.FC = () => {
   
   // -- ESTADOS DE BUSCA --
   const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal'>('all');
+  const [locationFilter, setLocationFilter] = useState('');
+  const [priceRange, setPriceRange] = useState<{max: number}>({max: 0});
+  const [minBedrooms, setMinBedrooms] = useState(0);
 
   const loadingTimeoutRef = useRef<any>(null);
 
@@ -499,7 +575,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.8 - Cache Local + Tratamento de Falha");
+    console.log("App V.3.9 - SQL Blindado");
     // Tenta carregar do cache local primeiro para evitar "flash" de cor errada
     const cachedSettings = localStorage.getItem('site_settings_cache');
     if (cachedSettings) {
@@ -641,29 +717,43 @@ const AppContent: React.FC = () => {
   const visibleProperties = properties.filter(p => {
     if (view === ViewState.ADMIN_PROPERTIES) return true; // Admin vê tudo
     if (p.active === false) return false; // Público não vê inativos
+    
+    // Filtro por Tipo (Botões)
     const matchesType = filterType === 'all' || p.type === filterType;
-    return matchesType;
+    
+    // Filtro por Localização (Busca)
+    const matchesLocation = locationFilter === '' || 
+       p.location.toLowerCase().includes(locationFilter.toLowerCase()) || 
+       p.title.toLowerCase().includes(locationFilter.toLowerCase());
+
+    // Filtro por Quartos
+    const matchesBedrooms = minBedrooms === 0 || p.bedrooms >= minBedrooms;
+
+    // Filtro por Preço Máximo
+    const matchesPrice = priceRange.max === 0 || p.price <= priceRange.max;
+
+    return matchesType && matchesLocation && matchesBedrooms && matchesPrice;
   });
 
   if (showDbSetup) return <DatabaseSetup />;
 
   return (
     <div className="min-h-screen bg-page font-sans text-main flex flex-col">
-      <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100 h-16 flex items-center justify-between px-4 shrink-0">
+      <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100 h-16 flex items-center justify-between px-2 md:px-4 shrink-0">
          <div className="flex items-center gap-3 font-bold text-xl cursor-pointer" onClick={() => setView(ViewState.HOME)}>
             {settings.logoUrl && !logoFailed ? (
-               <img src={settings.logoUrl} className="h-12 w-auto" onError={() => setLogoFailed(true)} />
-            ) : <UbatubaLogo className="h-12 w-12" />}
+               <img src={settings.logoUrl} className="h-10 w-auto md:h-12" onError={() => setLogoFailed(true)} />
+            ) : <UbatubaLogo className="h-10 w-10 md:h-12 md:w-12" />}
             <span className="hidden md:block text-ocean-800">{settings.siteName}</span>
          </div>
          <div className="flex gap-2">
            {view === ViewState.HOME ? (
-             <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="px-4 py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-2 text-sm font-medium">
-                <UserCircle size={18}/> Área Admin
+             <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
+                <UserCircle size={16}/> Área Admin
              </button>
            ) : (
-             <button onClick={() => setView(ViewState.HOME)} className="px-4 py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-2 text-sm font-medium">
-                <Globe size={18}/> Ver Site
+             <button onClick={() => setView(ViewState.HOME)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
+                <Globe size={16}/> Ver Site
              </button>
            )}
          </div>
@@ -681,12 +771,57 @@ const AppContent: React.FC = () => {
 
         {view === ViewState.HOME && (
           <>
-            {/* BOTÕES DE FILTRO */}
-            <div className="bg-ocean-50 py-8 border-b border-ocean-100">
-               <div className="container mx-auto px-4 flex justify-center gap-4 flex-wrap">
-                  <button onClick={() => setFilterType('all')} className={`px-6 py-3 rounded-full font-bold text-lg transition-all ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg scale-105' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
-                  <button onClick={() => setFilterType('rent_seasonal')} className={`px-6 py-3 rounded-full font-bold text-lg transition-all ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg scale-105' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
-                  <button onClick={() => setFilterType('sale')} className={`px-6 py-3 rounded-full font-bold text-lg transition-all ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg scale-105' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
+            {/* BOTÕES DE FILTRO E BUSCA */}
+            <div className="bg-ocean-50 py-4 md:py-8 border-b border-ocean-100">
+               <div className="container mx-auto px-2 md:px-4">
+                 
+                 {/* Botoes Grandes */}
+                 <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
+                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
+                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
+                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
+                 </div>
+
+                 {/* Busca Apurada (Filtros Finos) */}
+                 <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-ocean-100 max-w-4xl mx-auto flex flex-col md:flex-row gap-3 items-center">
+                    <div className="relative flex-1 w-full">
+                       <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/>
+                       <input 
+                         className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
+                         placeholder="Bairro ou Condomínio..." 
+                         value={locationFilter}
+                         onChange={e => setLocationFilter(e.target.value)}
+                       />
+                    </div>
+                    <div className="flex w-full md:w-auto gap-2">
+                       <div className="relative flex-1 md:w-32">
+                         <Bed size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/>
+                         <input 
+                           type="number"
+                           className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
+                           placeholder="Quartos+" 
+                           value={minBedrooms || ''}
+                           onChange={e => setMinBedrooms(Number(e.target.value))}
+                         />
+                       </div>
+                       <div className="relative flex-1 md:w-36">
+                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">R$</span>
+                         <input 
+                           type="number"
+                           className="w-full pl-8 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
+                           placeholder="Máximo..." 
+                           value={priceRange.max || ''}
+                           onChange={e => setPriceRange({max: Number(e.target.value)})}
+                         />
+                       </div>
+                    </div>
+                    {(locationFilter || minBedrooms > 0 || priceRange.max > 0) && (
+                      <button onClick={() => { setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full" title="Limpar Filtros">
+                         <X size={18} />
+                      </button>
+                    )}
+                 </div>
+
                </div>
             </div>
 
@@ -699,8 +834,9 @@ const AppContent: React.FC = () => {
               ))}
               {visibleProperties.length === 0 && !isLoading && !dbError && (
                  <div className="col-span-full text-center py-12 text-muted">
-                    <p className="text-xl">Nenhum imóvel encontrado.</p>
-                    <p className="text-sm">Tente mudar o filtro.</p>
+                    <Filter size={48} className="mx-auto mb-4 text-ocean-200" />
+                    <p className="text-xl">Nenhum imóvel encontrado com estes filtros.</p>
+                    <button onClick={() => { setFilterType('all'); setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="mt-4 text-ocean-600 font-bold hover:underline">Limpar Filtros</button>
                  </div>
               )}
             </div>
