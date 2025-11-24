@@ -588,20 +588,41 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <select className="p-2 border rounded" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
-            <option value="sale">Venda</option>
-            <option value="rent_seasonal">Aluguel Temporada</option>
-          </select>
-          <input placeholder="Título do Anúncio" className="p-2 border rounded" value={formData.title || ''} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1">Tipo de Anúncio</label>
+            <select className="w-full p-2 border rounded" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
+              <option value="sale">Venda</option>
+              <option value="rent_seasonal">Aluguel Temporada</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1">Título do Anúncio</label>
+            <input placeholder="Ex: Casa Linda em Itaguá" className="w-full p-2 border rounded" value={formData.title || ''} onChange={e => setFormData({ ...formData, title: e.target.value })} />
+          </div>
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <input placeholder="Localização (Bairro)" className="p-2 border rounded" value={formData.location || ''} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-          <input type="number" placeholder="Preço (R$)" className="p-2 border rounded" value={formData.price || ''} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} />
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1">Localização (Bairro/Praia)</label>
+            <input placeholder="Ex: Itamambuca" className="w-full p-2 border rounded" value={formData.location || ''} onChange={e => setFormData({ ...formData, location: e.target.value })} />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-muted mb-1">Preço (R$)</label>
+            <input type="number" placeholder="Ex: 5000" className="w-full p-2 border rounded" value={formData.price || ''} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} />
+          </div>
         </div>
         <div className="grid grid-cols-3 gap-4">
-           <input type="number" placeholder="Quartos" className="p-2 border rounded" value={formData.bedrooms || ''} onChange={e => setFormData({ ...formData, bedrooms: Number(e.target.value) })} />
-           <input type="number" placeholder="Banheiros" className="p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} />
-           <input type="number" placeholder="Área (m²)" className="p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} />
+           <div>
+              <label className="block text-sm font-medium text-muted mb-1">Quartos</label>
+              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.bedrooms || ''} onChange={e => setFormData({ ...formData, bedrooms: Number(e.target.value) })} />
+           </div>
+           <div>
+              <label className="block text-sm font-medium text-muted mb-1">Banheiros</label>
+              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} />
+           </div>
+           <div>
+              <label className="block text-sm font-medium text-muted mb-1">Área (m²)</label>
+              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} />
+           </div>
         </div>
 
         {/* CARACTERÍSTICAS (Campo Novo) */}
@@ -628,8 +649,8 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
         </div>
 
         <div>
-           <label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><FileText size={14}/> Anotações Internas</label>
-           <input className="w-full p-2 border border-yellow-200 bg-yellow-50 rounded text-sm" placeholder="Ex: Chave na portaria..." value={formData.owner_notes || ''} onChange={e => setFormData({ ...formData, owner_notes: e.target.value })} />
+           <label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><FileText size={14}/> Anotações Internas (Não aparece no site)</label>
+           <input className="w-full p-2 border border-yellow-200 bg-yellow-50 rounded text-sm" placeholder="Ex: Chave na portaria, Proprietário Sr. João..." value={formData.owner_notes || ''} onChange={e => setFormData({ ...formData, owner_notes: e.target.value })} />
         </div>
 
         <div>
@@ -652,7 +673,12 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
             ))}
           </div>
         </div>
-        <textarea placeholder="Descrição" rows={5} className="w-full p-2 border rounded" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+        
+        <div>
+           <label className="block text-sm font-medium text-muted mb-1">Descrição Completa</label>
+           <textarea placeholder="Descreva o imóvel..." rows={5} className="w-full p-2 border rounded" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
+        </div>
+        
         <div className="flex gap-2 justify-end">
           <button onClick={handleGenerateDesc} disabled={loading} className="flex items-center gap-2 text-ocean-600 bg-ocean-50 px-4 py-2 rounded hover:bg-ocean-100 border border-ocean-200">
              <Sparkles size={16} className={loading ? 'animate-pulse text-purple-500' : 'text-purple-600'} /> 
@@ -713,12 +739,19 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
         <div className="space-y-4">
            <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100">
               <h3 className="font-bold mb-4 flex items-center gap-2"><Phone size={18}/> Contato & Social</h3>
+              <label className="block text-sm mb-1">Endereço</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Endereço" value={local.contact.address} onChange={e => setLocal({ ...local, contact: { ...local.contact, address: e.target.value } })} />
+              <label className="block text-sm mb-1">Telefone Principal</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Telefone Principal" value={local.contact.phone} onChange={e => setLocal({ ...local, contact: { ...local.contact, phone: maskPhone(e.target.value) } })} />
+              <label className="block text-sm mb-1">WhatsApp Reservas</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="WhatsApp Reservas" value={local.contact.bookingPhone || ''} onChange={e => setLocal({ ...local, contact: { ...local.contact, bookingPhone: maskPhone(e.target.value) } })} />
+              <label className="block text-sm mb-1">Email</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Email" value={local.contact.email} onChange={e => setLocal({ ...local, contact: { ...local.contact, email: e.target.value } })} />
+              <label className="block text-sm mb-1">Horário de Atendimento</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Horário de Atendimento (Ex: Seg-Sex 9h-18h)" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
+              <label className="block text-sm mb-1">Instagram</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Instagram (Ex: @imobiliaria)" value={local.social.instagram} onChange={e => setLocal({ ...local, social: { ...local.social, instagram: e.target.value } })} />
+              <label className="block text-sm mb-1">Facebook</label>
               <input className="w-full p-2 border rounded mb-3" placeholder="Facebook (URL ou Nome)" value={local.social.facebook} onChange={e => setLocal({ ...local, social: { ...local.social, facebook: e.target.value } })} />
            </div>
         </div>
