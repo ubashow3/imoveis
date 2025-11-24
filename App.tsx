@@ -48,12 +48,6 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 
 // --- UTILS ---
 const maskPhone = (value: string) => value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').replace(/(-\d{4})\d+?$/, '$1');
-const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
-  const reader = new FileReader();
-  reader.readAsDataURL(file);
-  reader.onload = () => resolve(reader.result as string);
-  reader.onerror = error => reject(error);
-});
 
 // Upload real para Supabase Storage (CORRIGIDO)
 const uploadImage = async (file: File): Promise<string | null> => {
@@ -647,12 +641,21 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
 
 const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings) => void }> = ({ settings, onSave }) => {
   const [local, setLocal] = useState(settings);
+  const [uploading, setUploading] = useState(false);
+
+  // FIX: Usar uploadImage (Supabase) em vez de base64 local
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-       const base64 = await fileToBase64(e.target.files[0]);
-       setLocal({ ...local, logoUrl: base64 });
+       setUploading(true);
+       const url = await uploadImage(e.target.files[0]);
+       if (url) {
+         setLocal({ ...local, logoUrl: url });
+       }
+       setUploading(false);
+       e.target.value = '';
     }
   };
+
   return (
     <div className="container mx-auto p-4 max-w-4xl">
       <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Settings/> Configurações do Site</h2>
@@ -665,7 +668,10 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
               <label className="block text-sm mb-1">Logo (URL ou Upload)</label>
               <div className="flex gap-2 mb-3">
                 <input className="flex-1 p-2 border rounded" value={local.logoUrl || ''} onChange={e => setLocal({ ...local, logoUrl: e.target.value })} placeholder="/img/logo.png" />
-                <label className="bg-gray-200 px-3 py-2 rounded cursor-pointer"><Upload size={20}/><input type="file" hidden onChange={handleFile}/></label>
+                <label className={`bg-gray-200 px-3 py-2 rounded cursor-pointer flex items-center gap-2 ${uploading ? 'opacity-50' : ''}`}>
+                   {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Upload size={20}/>}
+                   <input type="file" hidden onChange={handleFile} disabled={uploading}/>
+                </label>
               </div>
               <label className="block text-sm mb-1">Tema de Cores</label>
               <div className="grid grid-cols-4 gap-2">
