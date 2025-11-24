@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -49,19 +49,17 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 // --- UTILS ---
 const maskPhone = (value: string) => value.replace(/\D/g, '').replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2').replace(/(-\d{4})\d+?$/, '$1');
 
-// Upload real para Supabase Storage (CORRIGIDO)
+// Upload real para Supabase Storage
 const uploadImage = async (file: File): Promise<string | null> => {
   try {
-    // 1. Limpar nome do arquivo (remove acentos e espaços)
     const fileExt = file.name.split('.').pop();
     const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, '');
     const fileName = `${Date.now()}_${cleanName}.${fileExt}`;
     
     console.log("Iniciando upload para:", fileName);
 
-    // 2. Tentar Upload
     const { data, error: uploadError } = await supabase.storage
-      .from('images') // O Bucket deve se chamar 'images'
+      .from('images')
       .upload(fileName, file, {
         cacheControl: '3600',
         upsert: false
@@ -72,7 +70,6 @@ const uploadImage = async (file: File): Promise<string | null> => {
       throw uploadError;
     }
 
-    // 3. Pegar URL Pública
     const { data: urlData } = supabase.storage.from('images').getPublicUrl(fileName);
     
     if (!urlData || !urlData.publicUrl) {
@@ -88,7 +85,7 @@ const uploadImage = async (file: File): Promise<string | null> => {
     let msg = error.message || "Erro desconhecido";
     
     if (msg.includes('row-level security') || msg.includes('new row violates')) {
-      alert('ERRO DE PERMISSÃO: O Supabase bloqueou o envio.\n\nSOLUÇÃO: Vá em Configurações > Ver SQL e rode o código no Supabase para liberar o Bucket.');
+      alert('ERRO DE PERMISSÃO: O Supabase bloqueou o envio.\n\nSOLUÇÃO: Vá em Configurações > Ajuda DB e rode o SQL.');
     } else if (msg.includes('Bucket not found')) {
       alert('ERRO: O Bucket "images" não existe.\n\nSOLUÇÃO: Rode o SQL de atualização no Supabase.');
     } else {
@@ -98,7 +95,7 @@ const uploadImage = async (file: File): Promise<string | null> => {
   }
 };
 
-// --- SQL SETUP (REFORÇADO) ---
+// --- SQL SETUP (ATUALIZADO COM MAX_GUESTS) ---
 const SQL_SETUP_CODE = `-- 1. TABELAS (Estrutura)
 create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
@@ -116,7 +113,8 @@ create table if not exists properties (
   views integer default 0,
   active boolean default true,
   featured boolean default false,
-  owner_notes text
+  owner_notes text,
+  max_guests integer default 0
 );
 
 create table if not exists site_settings (
@@ -137,6 +135,9 @@ begin
   if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='owner_notes') then
     alter table properties add column owner_notes text;
   end if;
+  if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='max_guests') then
+    alter table properties add column max_guests integer default 0;
+  end if;
 end
 $$;
 
@@ -150,7 +151,7 @@ drop policy if exists "Public Settings" on site_settings;
 create policy "Public Access" on properties for all using (true) with check (true);
 create policy "Public Settings" on site_settings for all using (true) with check (true);
 
--- 4. STORAGE (IMAGENS) - CRÍTICO
+-- 4. STORAGE (IMAGENS)
 insert into storage.buckets (id, name, public) 
 values ('images', 'images', true) 
 on conflict (id) do update set public = true;
@@ -184,7 +185,6 @@ const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
   </svg>
 );
 
-// --- LOADING COMPONENT (LOOPING) ---
 const LoadingSpinner: React.FC = () => (
   <div className="flex flex-col items-center justify-center min-h-[50vh] w-full animate-in fade-in">
     <div className="relative mb-4">
@@ -216,12 +216,8 @@ const INITIAL_SETTINGS: SiteSettings = {
 const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
   const [imgError, setImgError] = useState(false);
 
-  // RESETAR erro de imagem se a URL mudar (ex: upload novo)
-  useEffect(() => {
-    setImgError(false);
-  }, [settings.logoUrl]);
+  useEffect(() => { setImgError(false); }, [settings.logoUrl]);
 
-  // Helper para links sociais
   const getSocialLink = (value: string, baseUrl: string) => {
     if (!value) return '#';
     if (value.startsWith('http')) return value;
@@ -237,12 +233,7 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
               <div className="bg-white rounded-full p-1 h-10 w-10 flex items-center justify-center overflow-hidden">
                 {settings.logoUrl && !imgError ? (
-                  <img 
-                    src={settings.logoUrl} 
-                    className="h-full w-full object-contain" 
-                    alt="Logo Footer"
-                    onError={() => setImgError(true)}
-                  />
+                  <img src={settings.logoUrl} className="h-full w-full object-contain" alt="Logo Footer" onError={() => setImgError(true)} />
                 ) : (
                   <UbatubaLogo className="h-8 w-8 text-ocean-600"/>
                 )}
@@ -250,8 +241,7 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
               {settings.siteName}
             </h3>
             <p className="text-ocean-200 text-sm leading-relaxed">
-              Encontre o seu imóvel ideal no litoral. 
-              Venda e Aluguel de Temporada com total segurança.
+              Encontre o seu imóvel ideal no litoral. Venda e Aluguel de Temporada com total segurança.
             </p>
           </div>
           <div>
@@ -284,13 +274,11 @@ const Footer: React.FC<{ settings: SiteSettings }> = ({ settings }) => {
   );
 };
 
-// LOGIN MODAL
 const AdminLoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin: () => void }> = ({ isOpen, onClose, onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState(false);
 
   if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === 'fechadura') {
@@ -301,7 +289,6 @@ const AdminLoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin:
       setError(true);
     }
   };
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full relative animate-in fade-in zoom-in duration-200">
@@ -309,23 +296,14 @@ const AdminLoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin:
         <div className="flex flex-col items-center mb-6">
           <div className="bg-ocean-100 p-4 rounded-full mb-4 text-ocean-600"><Lock size={32}/></div>
           <h2 className="text-2xl font-bold text-ocean-800">Área Restrita</h2>
-          <p className="text-sm text-gray-500 text-center">Digite a senha de administrador para acessar o painel.</p>
+          <p className="text-sm text-gray-500 text-center">Digite a senha de administrador.</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-             <input 
-               type="password" 
-               className={`w-full p-3 border rounded-lg text-center font-bold tracking-widest text-lg outline-none focus:ring-2 ${error ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-ocean-200 focus:ring-ocean-200'}`}
-               placeholder="Senha"
-               value={password}
-               onChange={e => { setPassword(e.target.value); setError(false); }}
-               autoFocus
-             />
-             {error && <p className="text-red-500 text-xs text-center mt-2 font-bold">Senha incorreta. Tente novamente.</p>}
+             <input type="password" className={`w-full p-3 border rounded-lg text-center font-bold tracking-widest text-lg outline-none focus:ring-2 ${error ? 'border-red-300 focus:ring-red-200 bg-red-50' : 'border-ocean-200 focus:ring-ocean-200'}`} placeholder="Senha" value={password} onChange={e => { setPassword(e.target.value); setError(false); }} autoFocus />
+             {error && <p className="text-red-500 text-xs text-center mt-2 font-bold">Senha incorreta.</p>}
           </div>
-          <button type="submit" className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-lg">
-             <LogIn size={20}/> Entrar
-          </button>
+          <button type="submit" className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg"><LogIn size={20}/> Entrar</button>
         </form>
       </div>
     </div>
@@ -343,9 +321,7 @@ const DatabaseSetup: React.FC = () => {
     <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[60vh] text-center">
       <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
       <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização de Banco de Dados</h1>
-      <p className="text-muted max-w-2xl mb-8">
-        Para corrigir o UPLOAD DE IMAGENS, copie o SQL abaixo e rode no Supabase.
-      </p>
+      <p className="text-muted max-w-2xl mb-8">Para corrigir as tabelas e o UPLOAD, copie o SQL e rode no Supabase.</p>
       <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
         <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
           <span className="text-gray-400 text-sm font-mono">SQL</span>
@@ -363,8 +339,6 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const images = property.images && property.images.length > 0 ? property.images : ['https://via.placeholder.com/800x600?text=Sem+Foto'];
-  
-  // Lógica: Se não for venda explícita, assume temporada (para garantir que calendário apareça)
   const isSeasonal = property.type !== 'sale';
   
   const getDays = () => {
@@ -378,29 +352,21 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
   
   const days = getDays();
   const totalPrice = days * property.price;
+  const pricePerPerson = (property.max_guests && property.max_guests > 0) ? (property.price / property.max_guests) : 0;
 
   const handleBook = () => {
     let msg = '';
     const phone = bookingPhone.replace(/\D/g, '');
 
     if (isSeasonal) {
-      if (!start || !end) {
-        alert("Por favor, selecione as datas de entrada e saída.");
-        return;
-      }
+      if (!start || !end) { alert("Por favor, selecione as datas."); return; }
       const formattedStart = new Date(start).toLocaleDateString('pt-BR');
       const formattedEnd = new Date(end).toLocaleDateString('pt-BR');
       const formattedTotal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalPrice);
-      
-      msg = `Olá! Gostaria de reservar o imóvel *${property.title}*.\n\n` +
-            `📅 *Check-in:* ${formattedStart}\n` +
-            `📅 *Check-out:* ${formattedEnd}\n` +
-            `🌙 *Diárias:* ${days}\n` +
-            `💰 *Valor Total Estimado:* ${formattedTotal}`;
+      msg = `Olá! Gostaria de reservar *${property.title}*.\n📅 Check-in: ${formattedStart}\n📅 Check-out: ${formattedEnd}\n🌙 Diárias: ${days}\n💰 Total: ${formattedTotal}`;
     } else {
-      msg = `Olá! Tenho interesse em comprar o imóvel *${property.title}* que vi no site (R$ ${property.price}).`;
+      msg = `Olá! Tenho interesse em comprar o imóvel *${property.title}* (R$ ${property.price}).`;
     }
-    
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
   };
 
@@ -411,8 +377,8 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
         <img src={images[imgIdx]} alt={property.title} className="w-full h-full object-cover" />
         {images.length > 1 && (
           <>
-            <button onClick={() => setImgIdx((prev) => (prev - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white transition-colors"><ChevronLeft size={24}/></button>
-            <button onClick={() => setImgIdx((prev) => (prev + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white transition-colors"><ChevronRight size={24}/></button>
+            <button onClick={() => setImgIdx((prev) => (prev - 1 + images.length) % images.length)} className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white"><ChevronLeft size={24}/></button>
+            <button onClick={() => setImgIdx((prev) => (prev + 1) % images.length)} className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 p-3 rounded-full text-white"><ChevronRight size={24}/></button>
             <div className="absolute bottom-6 right-6 bg-black/60 text-white px-4 py-1 rounded-full text-sm font-medium">{imgIdx + 1} / {images.length}</div>
           </>
         )}
@@ -430,22 +396,23 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
             <div className="flex items-center text-muted"><MapPin size={18} className="mr-1" /> {property.location}</div>
           </div>
           
-          <div className="flex gap-4 md:gap-8 border-y border-ocean-100 py-6 my-6 justify-center md:justify-start">
+          <div className="flex gap-4 md:gap-8 border-y border-ocean-100 py-6 my-6 justify-center md:justify-start flex-wrap">
              <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Bed/> {property.bedrooms}</div><span className="text-xs text-muted uppercase">Quartos</span></div>
              <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Bath/> {property.bathrooms}</div><span className="text-xs text-muted uppercase">Banheiros</span></div>
              <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-ocean-600 font-bold text-xl"><Expand/> {property.area}</div><span className="text-xs text-muted uppercase">m² Úteis</span></div>
+             {isSeasonal && property.max_guests && (
+               <div className="text-center md:text-left"><div className="flex items-center justify-center md:justify-start gap-2 text-green-600 font-bold text-xl"><Users/> {property.max_guests}</div><span className="text-xs text-muted uppercase">Pessoas (Máx)</span></div>
+             )}
           </div>
           
           <h3 className="text-lg font-bold mb-3">Sobre este imóvel</h3>
           <p className="whitespace-pre-line text-muted mb-8 leading-relaxed text-lg">{property.description}</p>
-          
           <h3 className="text-lg font-bold mb-3">Características</h3>
           <div className="flex flex-wrap gap-2 mb-8">
             {property.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-4 py-2 rounded-lg text-sm flex items-center font-medium"><CheckCircle size={16} className="mr-2 text-ocean-500"/>{f}</span>)}
           </div>
         </div>
         
-        {/* PAINEL DE RESERVA / CONTATO */}
         <div className="lg:col-span-1">
           <div className="bg-white border border-ocean-200 rounded-2xl p-6 shadow-xl sticky top-24">
              <div className="mb-6 pb-6 border-b border-ocean-100 text-center">
@@ -453,6 +420,11 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price)}
                 </span>
                 <span className="text-muted text-sm uppercase font-bold tracking-wide">{isSeasonal ? 'Valor por Noite' : 'Valor de Venda'}</span>
+                {isSeasonal && pricePerPerson > 0 && (
+                  <div className="mt-2 text-sm bg-green-50 text-green-700 py-1 px-2 rounded-lg inline-block font-semibold">
+                    Sai a {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pricePerPerson)} por pessoa!
+                  </div>
+                )}
              </div>
              
              {isSeasonal ? (
@@ -461,26 +433,15 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                     <h4 className="font-bold text-ocean-800 mb-3 flex items-center gap-2"><Calendar size={18}/> Planeje sua Estadia</h4>
                     <div className="space-y-3">
                        <div>
-                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Entrada (Check-in)</label>
-                          <input 
-                            type="date" 
-                            className="w-full p-3 border border-ocean-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500 shadow-sm" 
-                            value={start} 
-                            onChange={e => setStart(e.target.value)} 
-                          />
+                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Entrada</label>
+                          <input type="date" className="w-full p-3 border border-ocean-200 rounded-lg bg-white" value={start} onChange={e => setStart(e.target.value)} />
                        </div>
                        <div>
-                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Saída (Check-out)</label>
-                          <input 
-                            type="date" 
-                            className="w-full p-3 border border-ocean-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ocean-500 shadow-sm" 
-                            value={end} 
-                            onChange={e => setEnd(e.target.value)} 
-                          />
+                          <label className="block text-xs font-bold uppercase text-muted mb-1 ml-1">Saída</label>
+                          <input type="date" className="w-full p-3 border border-ocean-200 rounded-lg bg-white" value={end} onChange={e => setEnd(e.target.value)} />
                        </div>
                     </div>
                  </div>
-                 
                  {days > 0 && (
                    <div className="bg-white border border-ocean-200 rounded-lg p-4 mb-4 shadow-sm">
                       <div className="flex justify-between items-center mb-2 text-sm text-gray-600">
@@ -493,18 +454,11 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
                       </div>
                    </div>
                  )}
-                 
-                 <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105 active:scale-95 text-lg">
-                   <Phone size={24} /> Reservar via WhatsApp
-                 </button>
-                 <p className="text-xs text-center text-muted mt-3 px-4">Ao clicar, você será redirecionado para o WhatsApp com os detalhes da reserva.</p>
+                 <button onClick={handleBook} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-transform"><Phone size={24} /> Reservar via WhatsApp</button>
                </div>
              ) : (
                <div className="mb-2">
-                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-transform hover:scale-105 active:scale-95 text-lg">
-                   <Phone size={24} /> Falar com Corretor
-                 </button>
-                 <p className="text-xs text-center text-muted mt-3">Tire suas dúvidas ou agende uma visita agora mesmo.</p>
+                 <button onClick={handleBook} className="w-full bg-ocean-600 hover:bg-ocean-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg hover:scale-105 transition-transform"><Phone size={24} /> Falar com Corretor</button>
                </div>
              )}
           </div>
@@ -516,12 +470,7 @@ const PropertyDetails: React.FC<{ property: Property; onBack: () => void; bookin
 
 const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Property>) => Promise<void>; onCancel: () => void; }> = ({ property, onSave, onCancel }) => {
   const [formData, setFormData] = useState<Partial<Property>>(property || { 
-    type: 'sale', 
-    features: [], 
-    images: [],
-    active: true,
-    featured: false,
-    owner_notes: ''
+    type: 'sale', features: [], images: [], active: true, featured: false, owner_notes: '', max_guests: 0
   });
   const [loading, setLoading] = useState(false);
   const [imgUrl, setImgUrl] = useState('');
@@ -530,7 +479,16 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
 
   const handleGenerateDesc = async () => {
     setLoading(true);
-    const desc = await generatePropertyDescription(formData.features || [], formData.location || '', formData.type || 'sale', formData.bedrooms || 2);
+    const desc = await generatePropertyDescription({
+      title: formData.title,
+      location: formData.location,
+      type: formData.type,
+      bedrooms: formData.bedrooms,
+      bathrooms: formData.bathrooms,
+      area: formData.area,
+      price: formData.price,
+      features: formData.features
+    });
     setFormData(prev => ({ ...prev, description: desc }));
     setLoading(false);
   };
@@ -542,31 +500,15 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
     if (e.target.files?.[0]) {
        setUploading(true);
        const url = await uploadImage(e.target.files[0]);
-       if (url) {
-         setFormData(prev => ({ ...prev, images: [...(prev.images || []), url] }));
-       }
+       if (url) setFormData(prev => ({ ...prev, images: [...(prev.images || []), url] }));
        setUploading(false);
        e.target.value = '';
     }
   };
 
-  const addFeature = () => {
-    if (newFeature.trim()) {
-      setFormData(prev => ({ ...prev, features: [...(prev.features || []), newFeature.trim()] }));
-      setNewFeature('');
-    }
-  };
-
-  const removeFeature = (index: number) => {
-    setFormData(prev => ({ ...prev, features: prev.features?.filter((_, i) => i !== index) }));
-  };
-
-  const handleFeatureKey = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addFeature();
-    }
-  };
+  const addFeature = () => { if (newFeature.trim()) { setFormData(prev => ({ ...prev, features: [...(prev.features || []), newFeature.trim()] })); setNewFeature(''); }};
+  const removeFeature = (index: number) => { setFormData(prev => ({ ...prev, features: prev.features?.filter((_, i) => i !== index) })); };
+  const handleFeatureKey = (e: React.KeyboardEvent) => { if (e.key === 'Enter') { e.preventDefault(); addFeature(); }};
 
   return (
     <div className="container mx-auto p-4 max-w-3xl">
@@ -574,117 +516,64 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
       <h2 className="text-2xl font-bold mb-6">{property ? 'Editar Imóvel' : 'Novo Imóvel'}</h2>
       <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100 space-y-4">
         
-        {/* Status e Destaque */}
         <div className="flex gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-           <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={formData.active !== false} onChange={e => setFormData({ ...formData, active: e.target.checked })} className="w-5 h-5 accent-ocean-600"/>
-              <span className="font-bold flex items-center gap-1">{formData.active !== false ? <Eye size={16}/> : <EyeOff size={16}/>} Visível no Site</span>
-           </label>
+           <label className="flex items-center gap-2 cursor-pointer"><input type="checkbox" checked={formData.active !== false} onChange={e => setFormData({ ...formData, active: e.target.checked })} className="w-5 h-5 accent-ocean-600"/><span className="font-bold flex items-center gap-1">{formData.active !== false ? <Eye size={16}/> : <EyeOff size={16}/>} Visível</span></label>
            <div className="w-px bg-gray-300"></div>
-           <label className="flex items-center gap-2 cursor-pointer text-yellow-600">
-              <input type="checkbox" checked={formData.featured || false} onChange={e => setFormData({ ...formData, featured: e.target.checked })} className="w-5 h-5 accent-yellow-500"/>
-              <span className="font-bold flex items-center gap-1"><Star size={16}/> Destaque / Super Oferta</span>
-           </label>
+           <label className="flex items-center gap-2 cursor-pointer text-yellow-600"><input type="checkbox" checked={formData.featured || false} onChange={e => setFormData({ ...formData, featured: e.target.checked })} className="w-5 h-5 accent-yellow-500"/><span className="font-bold flex items-center gap-1"><Star size={16}/> Destaque</span></label>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-muted mb-1">Tipo de Anúncio</label>
+            <label className="block text-sm font-bold text-muted mb-1">Tipo de Anúncio</label>
             <select className="w-full p-2 border rounded" value={formData.type} onChange={e => setFormData({ ...formData, type: e.target.value as any })}>
               <option value="sale">Venda</option>
               <option value="rent_seasonal">Aluguel Temporada</option>
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1">Título do Anúncio</label>
-            <input placeholder="Ex: Casa Linda em Itaguá" className="w-full p-2 border rounded" value={formData.title || ''} onChange={e => setFormData({ ...formData, title: e.target.value })} />
-          </div>
+          <div><label className="block text-sm font-bold text-muted mb-1">Título</label><input placeholder="Ex: Casa Linda" className="w-full p-2 border rounded" value={formData.title || ''} onChange={e => setFormData({ ...formData, title: e.target.value })} /></div>
         </div>
+
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1">Localização (Bairro/Praia)</label>
-            <input placeholder="Ex: Itamambuca" className="w-full p-2 border rounded" value={formData.location || ''} onChange={e => setFormData({ ...formData, location: e.target.value })} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-muted mb-1">Preço (R$)</label>
-            <input type="number" placeholder="Ex: 5000" className="w-full p-2 border rounded" value={formData.price || ''} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} />
-          </div>
+          <div><label className="block text-sm font-bold text-muted mb-1">Localização</label><input placeholder="Ex: Itamambuca" className="w-full p-2 border rounded" value={formData.location || ''} onChange={e => setFormData({ ...formData, location: e.target.value })} /></div>
+          <div><label className="block text-sm font-bold text-muted mb-1">Preço (R$)</label><input type="number" className="w-full p-2 border rounded" value={formData.price || ''} onChange={e => setFormData({ ...formData, price: Number(e.target.value) })} /></div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-           <div>
-              <label className="block text-sm font-medium text-muted mb-1">Quartos</label>
-              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.bedrooms || ''} onChange={e => setFormData({ ...formData, bedrooms: Number(e.target.value) })} />
-           </div>
-           <div>
-              <label className="block text-sm font-medium text-muted mb-1">Banheiros</label>
-              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} />
-           </div>
-           <div>
-              <label className="block text-sm font-medium text-muted mb-1">Área (m²)</label>
-              <input type="number" placeholder="0" className="w-full p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} />
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+           <div><label className="block text-sm font-bold text-muted mb-1">Quartos</label><input type="number" className="w-full p-2 border rounded" value={formData.bedrooms || ''} onChange={e => setFormData({ ...formData, bedrooms: Number(e.target.value) })} /></div>
+           <div><label className="block text-sm font-bold text-muted mb-1">Banheiros</label><input type="number" className="w-full p-2 border rounded" value={formData.bathrooms || ''} onChange={e => setFormData({ ...formData, bathrooms: Number(e.target.value) })} /></div>
+           <div><label className="block text-sm font-bold text-muted mb-1">Área (m²)</label><input type="number" className="w-full p-2 border rounded" value={formData.area || ''} onChange={e => setFormData({ ...formData, area: Number(e.target.value) })} /></div>
+           <div className={formData.type === 'rent_seasonal' ? 'bg-green-50 p-1 rounded' : ''}>
+              <label className="block text-sm font-bold text-muted mb-1 flex items-center gap-1"><Users size={14}/> Máx. Pessoas</label>
+              <input type="number" className="w-full p-2 border rounded" value={formData.max_guests || ''} onChange={e => setFormData({ ...formData, max_guests: Number(e.target.value) })} placeholder="0" />
            </div>
         </div>
 
-        {/* CARACTERÍSTICAS (Campo Novo) */}
         <div>
-           <label className="block text-sm font-medium text-muted mb-1">Características (Ex: Piscina, WiFi, Ar Condicionado)</label>
+           <label className="block text-sm font-bold text-muted mb-1">Características (Tag)</label>
            <div className="flex gap-2 mb-2">
-              <input 
-                className="flex-1 p-2 border rounded" 
-                placeholder="Digite e aperte Enter..." 
-                value={newFeature} 
-                onChange={e => setNewFeature(e.target.value)}
-                onKeyDown={handleFeatureKey}
-              />
-              <button onClick={addFeature} className="bg-ocean-100 text-ocean-600 px-4 rounded font-bold hover:bg-ocean-200"><Plus/></button>
+              <input className="flex-1 p-2 border rounded" placeholder="Digite e aperte Enter..." value={newFeature} onChange={e => setNewFeature(e.target.value)} onKeyDown={handleFeatureKey} />
+              <button onClick={addFeature} className="bg-ocean-100 text-ocean-600 px-4 rounded font-bold"><Plus/></button>
            </div>
-           <div className="flex flex-wrap gap-2">
-             {formData.features?.map((f, i) => (
-                <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-ocean-100">
-                  {f}
-                  <button onClick={() => removeFeature(i)} className="text-red-500 hover:text-red-700 rounded-full p-0.5"><X size={14}/></button>
-                </span>
-             ))}
-           </div>
+           <div className="flex flex-wrap gap-2">{formData.features?.map((f, i) => <span key={i} className="bg-ocean-50 text-ocean-700 px-3 py-1 rounded-full text-sm flex items-center gap-1 border border-ocean-100">{f}<button onClick={() => removeFeature(i)} className="text-red-500 rounded-full"><X size={14}/></button></span>)}</div>
         </div>
 
-        <div>
-           <label className="block text-sm font-medium text-muted mb-1 flex items-center gap-1"><FileText size={14}/> Anotações Internas (Não aparece no site)</label>
-           <input className="w-full p-2 border border-yellow-200 bg-yellow-50 rounded text-sm" placeholder="Ex: Chave na portaria, Proprietário Sr. João..." value={formData.owner_notes || ''} onChange={e => setFormData({ ...formData, owner_notes: e.target.value })} />
-        </div>
+        <div><label className="block text-sm font-bold text-muted mb-1">Anotações Internas</label><input className="w-full p-2 border border-yellow-200 bg-yellow-50 rounded text-sm" value={formData.owner_notes || ''} onChange={e => setFormData({ ...formData, owner_notes: e.target.value })} /></div>
 
         <div>
-          <label className="block text-sm font-medium text-muted mb-1">Fotos do Imóvel</label>
+          <label className="block text-sm font-bold text-muted mb-1">Fotos</label>
           <div className="flex gap-2 mb-2">
-            <input type="text" placeholder="Cole uma URL..." className="flex-1 p-2 border rounded" value={imgUrl} onChange={e => setImgUrl(e.target.value)} />
-            <button onClick={addImage} className="bg-ocean-100 text-ocean-600 px-4 rounded"><Plus /></button>
-            <label className={`bg-ocean-600 text-white px-4 py-2 rounded cursor-pointer flex items-center gap-2 hover:bg-ocean-700 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-              {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Upload size={20}/>}
-              <span>{uploading ? 'Enviando...' : 'Upload Foto'}</span>
-              <input type="file" hidden onChange={handleFile} accept="image/*" disabled={uploading}/>
+            <label className={`bg-ocean-600 text-white px-4 py-2 rounded cursor-pointer flex items-center gap-2 hover:bg-ocean-700 ${uploading ? 'opacity-50' : ''}`}>
+              {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Upload size={20}/>}<span>Upload</span><input type="file" hidden onChange={handleFile} accept="image/*" disabled={uploading}/>
             </label>
           </div>
-          <div className="flex gap-2 overflow-x-auto py-2">
-            {formData.images?.map((img, i) => (
-              <div key={i} className="relative w-20 h-20 flex-shrink-0 border rounded overflow-hidden">
-                <img src={img} className="w-full h-full object-cover" />
-                <button onClick={() => removeImage(i)} className="absolute top-0 right-0 bg-red-600 text-white p-0.5 opacity-80 hover:opacity-100"><X size={12}/></button>
-              </div>
-            ))}
-          </div>
+          <div className="flex gap-2 overflow-x-auto py-2">{formData.images?.map((img, i) => <div key={i} className="relative w-20 h-20 flex-shrink-0 border rounded overflow-hidden"><img src={img} className="w-full h-full object-cover" /><button onClick={() => removeImage(i)} className="absolute top-0 right-0 bg-red-600 text-white p-0.5"><X size={12}/></button></div>)}</div>
         </div>
         
-        <div>
-           <label className="block text-sm font-medium text-muted mb-1">Descrição Completa</label>
-           <textarea placeholder="Descreva o imóvel..." rows={5} className="w-full p-2 border rounded" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} />
-        </div>
+        <div><label className="block text-sm font-bold text-muted mb-1">Descrição</label><textarea rows={5} className="w-full p-2 border rounded" value={formData.description || ''} onChange={e => setFormData({ ...formData, description: e.target.value })} /></div>
         
         <div className="flex gap-2 justify-end">
-          <button onClick={handleGenerateDesc} disabled={loading} className="flex items-center gap-2 text-ocean-600 bg-ocean-50 px-4 py-2 rounded hover:bg-ocean-100 border border-ocean-200">
-             <Sparkles size={16} className={loading ? 'animate-pulse text-purple-500' : 'text-purple-600'} /> 
-             {loading ? 'Criando Texto...' : 'Gerar Descrição com IA'}
-          </button>
-          <button onClick={() => onSave(formData)} className="bg-ocean-600 text-white px-6 py-2 rounded hover:bg-ocean-700 shadow-md">Salvar Imóvel</button>
+          <button onClick={handleGenerateDesc} disabled={loading} className="flex items-center gap-2 text-ocean-600 bg-ocean-50 px-4 py-2 rounded hover:bg-ocean-100 border border-ocean-200">{loading ? 'Criando...' : 'Gerar com IA'}</button>
+          <button onClick={() => onSave(formData)} className="bg-ocean-600 text-white px-6 py-2 rounded hover:bg-ocean-700 shadow-md">Salvar</button>
         </div>
       </div>
     </div>
@@ -694,69 +583,42 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
 const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings) => void }> = ({ settings, onSave }) => {
   const [local, setLocal] = useState(settings);
   const [uploading, setUploading] = useState(false);
-
-  // FIX: Usar uploadImage (Supabase) em vez de base64 local
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
        setUploading(true);
        const url = await uploadImage(e.target.files[0]);
-       if (url) {
-         setLocal({ ...local, logoUrl: url });
-       }
-       setUploading(false);
-       e.target.value = '';
+       if (url) setLocal({ ...local, logoUrl: url });
+       setUploading(false); e.target.value = '';
     }
   };
-
   return (
     <div className="container mx-auto p-4 max-w-4xl">
-      <h2 className="text-2xl font-bold mb-6 flex items-center gap-2"><Settings/> Configurações do Site</h2>
+      <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold flex items-center gap-2"><Settings/> Configurações</h2><button onClick={() => window.open('https://supabase.com/dashboard', '_blank')} className="text-sm bg-gray-800 text-white px-3 py-1 rounded">Ajuda DB</button></div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="space-y-4">
-           <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100">
-              <h3 className="font-bold mb-4 flex items-center gap-2"><Palette size={18}/> Aparência</h3>
-              <label className="block text-sm mb-1">Nome do Site</label>
-              <input className="w-full p-2 border rounded mb-3" value={local.siteName} onChange={e => setLocal({ ...local, siteName: e.target.value })} />
-              <label className="block text-sm mb-1">Logo (URL ou Upload)</label>
-              <div className="flex gap-2 mb-3">
-                <input className="flex-1 p-2 border rounded" value={local.logoUrl || ''} onChange={e => setLocal({ ...local, logoUrl: e.target.value })} placeholder="/img/logo.png" />
-                <label className={`bg-gray-200 px-3 py-2 rounded cursor-pointer flex items-center gap-2 ${uploading ? 'opacity-50' : ''}`}>
-                   {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Upload size={20}/>}
-                   <input type="file" hidden onChange={handleFile} disabled={uploading}/>
-                </label>
-              </div>
-              <label className="block text-sm mb-1">Tema de Cores</label>
-              <div className="grid grid-cols-4 gap-2">
-                {['ocean', 'nature', 'sunset', 'dark'].map((c) => (
-                  <button key={c} onClick={() => setLocal({ ...local, primaryColor: c as any })}
-                    className={`h-8 rounded-full border-2 ${local.primaryColor === c ? 'border-black' : 'border-transparent'}`}
-                    style={{ background: c === 'ocean' ? '#0ea5e9' : c === 'nature' ? '#22c55e' : c === 'sunset' ? '#ef4444' : '#333' }}
-                  />
-                ))}
-              </div>
+        <div className="space-y-4 bg-white p-6 rounded-xl border border-ocean-100">
+           <h3 className="font-bold mb-4 flex items-center gap-2"><Palette/> Aparência</h3>
+           <label className="block text-sm mb-1">Nome do Site</label><input className="w-full p-2 border rounded mb-3" value={local.siteName} onChange={e => setLocal({ ...local, siteName: e.target.value })} />
+           <label className="block text-sm mb-1">Logo</label>
+           <div className="flex gap-2 mb-3">
+             <input className="flex-1 p-2 border rounded" value={local.logoUrl || ''} onChange={e => setLocal({ ...local, logoUrl: e.target.value })} />
+             <label className="bg-gray-200 px-3 py-2 rounded cursor-pointer">{uploading ? <RefreshCw className="animate-spin"/> : <Upload/>}<input type="file" hidden onChange={handleFile}/></label>
            </div>
+           <label className="block text-sm mb-1">Tema</label>
+           <div className="grid grid-cols-4 gap-2">{['ocean', 'nature', 'sunset', 'dark'].map((c) => <button key={c} onClick={() => setLocal({ ...local, primaryColor: c as any })} className={`h-8 rounded-full border-2 ${local.primaryColor === c ? 'border-black' : 'border-transparent'}`} style={{ background: c === 'ocean' ? '#0ea5e9' : c === 'nature' ? '#22c55e' : c === 'sunset' ? '#ef4444' : '#333' }} />)}</div>
         </div>
-        <div className="space-y-4">
-           <div className="bg-white p-6 rounded-xl shadow-sm border border-ocean-100">
-              <h3 className="font-bold mb-4 flex items-center gap-2"><Phone size={18}/> Contato & Social</h3>
-              <label className="block text-sm mb-1">Endereço</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Endereço" value={local.contact.address} onChange={e => setLocal({ ...local, contact: { ...local.contact, address: e.target.value } })} />
-              <label className="block text-sm mb-1">Telefone Principal</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Telefone Principal" value={local.contact.phone} onChange={e => setLocal({ ...local, contact: { ...local.contact, phone: maskPhone(e.target.value) } })} />
-              <label className="block text-sm mb-1">WhatsApp Reservas</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="WhatsApp Reservas" value={local.contact.bookingPhone || ''} onChange={e => setLocal({ ...local, contact: { ...local.contact, bookingPhone: maskPhone(e.target.value) } })} />
-              <label className="block text-sm mb-1">Email</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Email" value={local.contact.email} onChange={e => setLocal({ ...local, contact: { ...local.contact, email: e.target.value } })} />
-              <label className="block text-sm mb-1">Horário de Atendimento</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Horário de Atendimento (Ex: Seg-Sex 9h-18h)" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
-              <label className="block text-sm mb-1">Instagram</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Instagram (Ex: @imobiliaria)" value={local.social.instagram} onChange={e => setLocal({ ...local, social: { ...local.social, instagram: e.target.value } })} />
-              <label className="block text-sm mb-1">Facebook</label>
-              <input className="w-full p-2 border rounded mb-3" placeholder="Facebook (URL ou Nome)" value={local.social.facebook} onChange={e => setLocal({ ...local, social: { ...local.social, facebook: e.target.value } })} />
-           </div>
+        <div className="space-y-4 bg-white p-6 rounded-xl border border-ocean-100">
+           <h3 className="font-bold mb-4 flex items-center gap-2"><Phone/> Contato</h3>
+           <label className="block text-sm mb-1">WhatsApp Principal</label><input className="w-full p-2 border rounded mb-3" value={local.contact.phone} onChange={e => setLocal({ ...local, contact: { ...local.contact, phone: maskPhone(e.target.value) } })} />
+           <label className="block text-sm mb-1">WhatsApp Reservas</label><input className="w-full p-2 border rounded mb-3" value={local.contact.bookingPhone || ''} onChange={e => setLocal({ ...local, contact: { ...local.contact, bookingPhone: maskPhone(e.target.value) } })} />
+           <label className="block text-sm mb-1">Instagram</label><input className="w-full p-2 border rounded mb-3" value={local.social.instagram} onChange={e => setLocal({ ...local, social: { ...local.social, instagram: e.target.value } })} />
+           <label className="block text-sm mb-1">Facebook</label><input className="w-full p-2 border rounded mb-3" value={local.social.facebook} onChange={e => setLocal({ ...local, social: { ...local.social, facebook: e.target.value } })} />
+           <label className="block text-sm mb-1">Horários</label><input className="w-full p-2 border rounded mb-3" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
         </div>
       </div>
-      <button onClick={() => onSave(local)} className="mt-6 w-full bg-ocean-600 text-white py-3 rounded-xl font-bold hover:bg-ocean-700 flex justify-center gap-2"><Save/> Salvar Configurações</button>
+      <div className="mt-6 flex justify-between">
+         <button onClick={() => alert(SQL_SETUP_CODE)} className="text-red-500 text-xs font-bold underline">Ver SQL de Atualização</button>
+         <button onClick={() => onSave(local)} className="bg-ocean-600 text-white py-3 px-8 rounded-xl font-bold hover:bg-ocean-700 flex gap-2"><Save/> Salvar</button>
+      </div>
     </div>
   );
 };
@@ -770,8 +632,6 @@ const AppContent: React.FC = () => {
   const [dbError, setDbError] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [showDbSetup, setShowDbSetup] = useState(false);
-  
-  // -- ESTADOS DE LOGIN E BUSCA --
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal'>('all');
   const [locationFilter, setLocationFilter] = useState('');
@@ -780,156 +640,72 @@ const AppContent: React.FC = () => {
 
   const loadingTimeoutRef = useRef<any>(null);
 
-  // --- FORÇAR REMOÇÃO DO LOADER ---
-  useLayoutEffect(() => {
-    const loader = document.getElementById('loading-screen');
-    if (loader) loader.style.display = 'none';
-  }, []);
+  useLayoutEffect(() => { const loader = document.getElementById('loading-screen'); if (loader) loader.style.display = 'none'; }, []);
 
   useEffect(() => {
-    console.log("App V.3.13 - Social & Hours Edit");
-    // Tenta carregar do cache local primeiro
     const cachedSettings = localStorage.getItem('site_settings_cache');
-    if (cachedSettings) {
-      try {
-        setSettings(JSON.parse(cachedSettings));
-      } catch (e) { console.warn("Cache inválido"); }
-    }
-    fetchSettings();
-    fetchProperties();
+    if (cachedSettings) { try { setSettings(JSON.parse(cachedSettings)); } catch (e) {} }
+    fetchSettings(); fetchProperties();
     return () => { if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current); };
   }, []);
 
-  useEffect(() => {
-    document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`;
-  }, [settings]);
-
-  // RESETAR erro do logo no header quando a URL mudar
-  useEffect(() => {
-    setLogoFailed(false);
-  }, [settings.logoUrl]);
+  useEffect(() => { document.body.className = `bg-page text-main transition-colors duration-300 theme-${settings.primaryColor}`; }, [settings]);
+  useEffect(() => { setLogoFailed(false); }, [settings.logoUrl]);
 
   const fetchSettings = async () => {
     try {
       const { data, error } = await supabase.from('site_settings').select('data').single();
-      if (error) {
-        if (error.code === '42P01') {
-          console.warn("Tabela site_settings não existe.");
-          setShowDbSetup(true);
-        } else {
-          console.warn("Falha ao buscar settings (usando cache/local):", error.message);
-        }
-      } else if (data && data.data && Object.keys(data.data).length > 0) {
+      if (error && error.code === '42P01') { setShowDbSetup(true); } 
+      else if (data?.data) {
         setSettings({ ...INITIAL_SETTINGS, ...data.data });
         localStorage.setItem('site_settings_cache', JSON.stringify({ ...INITIAL_SETTINGS, ...data.data }));
       }
-    } catch (e) { 
-      console.log("Erro de rede ao buscar configurações", e); 
-    }
+    } catch (e) { console.log(e); }
   };
 
   const fetchProperties = async () => {
-    setIsLoading(true);
-    setDbError(null);
-    if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-    loadingTimeoutRef.current = setTimeout(() => {
-      if (isLoading) {
-        setIsLoading(false);
-        setDbError("A conexão está lenta.");
-      }
-    }, 8000);
-
+    setIsLoading(true); setDbError(null);
+    loadingTimeoutRef.current = setTimeout(() => { if (isLoading) { setIsLoading(false); setDbError("Conexão lenta."); } }, 8000);
     try {
-      const { data, error } = await supabase.from('properties')
-        .select('*')
-        .order('featured', { ascending: false, nullsLast: true })
-        .order('created_at', { ascending: false });
-
+      const { data, error } = await supabase.from('properties').select('*').order('featured', { ascending: false, nullsLast: true }).order('created_at', { ascending: false });
       if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current);
-
-      if (error) {
-        if (error.code === '42P01' || error.message.includes('does not exist')) setShowDbSetup(true);
-        else setDbError(error.message || "Erro desconhecido");
-      } else if (data) {
-        setProperties(data.map((p: any) => ({ 
-          ...p, 
-          images: p.images || [], 
-          features: p.features || [],
-          active: p.active !== false,
-          featured: p.featured === true
-        })));
+      if (error) { if (error.code === '42P01') setShowDbSetup(true); else setDbError(error.message); }
+      else if (data) {
+        setProperties(data.map((p: any) => ({ ...p, images: p.images || [], features: p.features || [], active: p.active !== false, featured: p.featured === true, max_guests: p.max_guests || 0 })));
       }
-    } catch (err: any) {
-      setDbError("Verifique sua conexão com a internet.");
-    }
+    } catch (err: any) { setDbError("Erro de conexão."); }
     setIsLoading(false);
   };
 
   const handleSaveSettings = async (newSettings: SiteSettings) => {
-    setSettings(newSettings);
-    localStorage.setItem('site_settings_cache', JSON.stringify(newSettings));
-
+    setSettings(newSettings); localStorage.setItem('site_settings_cache', JSON.stringify(newSettings));
     const { error } = await supabase.from('site_settings').upsert({ id: 1, data: newSettings });
-    if (error) {
-       if (error.code === '42P01') setShowDbSetup(true);
-       else alert("Erro ao salvar no banco (mas salvo localmente): " + error.message);
-    } else {
-       alert("Configurações salvas!");
-    }
+    if (error) { if (error.code === '42P01') setShowDbSetup(true); else alert("Erro ao salvar no banco: " + error.message); } else alert("Salvo!");
   };
 
   const handleSaveProperty = async (p: Partial<Property>) => {
-    const { error } = p.id 
-      ? await supabase.from('properties').update(p).eq('id', p.id)
-      : await supabase.from('properties').insert(p);
-    
-    if (error) alert("Erro: " + error.message);
-    else {
-      fetchProperties();
-      setView(ViewState.ADMIN_PROPERTIES);
-    }
+    const { error } = p.id ? await supabase.from('properties').update(p).eq('id', p.id) : await supabase.from('properties').insert(p);
+    if (error) alert("Erro: " + error.message); else { fetchProperties(); setView(ViewState.ADMIN_PROPERTIES); }
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("Tem certeza que deseja excluir?")) {
+    if (confirm("Excluir?")) {
       const { error } = await supabase.from('properties').delete().eq('id', id);
-      if (error) {
-         alert("Erro ao excluir: " + error.message);
-      } else {
-         alert("Imóvel excluído com sucesso!");
-         fetchProperties();
-      }
+      if (error) alert("Erro: " + error.message); else { alert("Excluído!"); fetchProperties(); }
     }
   };
 
-  // -- FILTRAGEM --
   const visibleProperties = properties.filter(p => {
-    if (view === ViewState.ADMIN_PROPERTIES) return true; // Admin vê tudo
-    if (p.active === false) return false; // Público não vê inativos
-    
-    // Filtro por Tipo (Botões) - Flexivel
-    // Se filterType for 'rent_seasonal', aceitamos 'rent_seasonal', 'temporada' ou 'rent'
-    // Se filterType for 'sale', aceitamos 'sale' ou 'venda'
+    if (view === ViewState.ADMIN_PROPERTIES) return true;
+    if (p.active === false) return false;
     let matchesType = filterType === 'all';
     if (!matchesType) {
-      if (filterType === 'rent_seasonal') {
-         matchesType = p.type === 'rent_seasonal' || p.type === 'temporada' || p.type === 'rent';
-      } else if (filterType === 'sale') {
-         matchesType = p.type === 'sale' || p.type === 'venda';
-      }
+      if (filterType === 'rent_seasonal') matchesType = p.type === 'rent_seasonal' || p.type === 'temporada' || p.type === 'rent';
+      else if (filterType === 'sale') matchesType = p.type === 'sale' || p.type === 'venda';
     }
-    
-    // Filtro por Localização (Busca)
-    const matchesLocation = locationFilter === '' || 
-       p.location.toLowerCase().includes(locationFilter.toLowerCase()) || 
-       p.title.toLowerCase().includes(locationFilter.toLowerCase());
-
-    // Filtro por Quartos
+    const matchesLocation = locationFilter === '' || p.location.toLowerCase().includes(locationFilter.toLowerCase()) || p.title.toLowerCase().includes(locationFilter.toLowerCase());
     const matchesBedrooms = minBedrooms === 0 || p.bedrooms >= minBedrooms;
-
-    // Filtro por Preço Máximo
     const matchesPrice = priceRange.max === 0 || p.price <= priceRange.max;
-
     return matchesType && matchesLocation && matchesBedrooms && matchesPrice;
   });
 
@@ -937,186 +713,75 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-page font-sans text-main flex flex-col">
-      <AdminLoginModal 
-        isOpen={showLoginModal} 
-        onClose={() => setShowLoginModal(false)} 
-        onLogin={() => {
-           setShowLoginModal(false);
-           setView(ViewState.ADMIN_PROPERTIES);
-        }}
-      />
+      <AdminLoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLogin={() => { setShowLoginModal(false); setView(ViewState.ADMIN_PROPERTIES); }} />
       <header className="bg-card shadow-sm sticky top-0 z-50 border-b border-ocean-100 h-16 flex items-center justify-between px-2 md:px-4 shrink-0">
          <div className="flex items-center gap-3 font-bold text-xl cursor-pointer" onClick={() => setView(ViewState.HOME)}>
-            {settings.logoUrl && !logoFailed ? (
-               <img src={settings.logoUrl} className="h-10 w-auto md:h-12" onError={() => setLogoFailed(true)} />
-            ) : <UbatubaLogo className="h-10 w-10 md:h-12 md:w-12" />}
+            {settings.logoUrl && !logoFailed ? (<img src={settings.logoUrl} className="h-10 w-auto md:h-12" onError={() => setLogoFailed(true)} />) : <UbatubaLogo className="h-10 w-10 md:h-12 md:w-12" />}
             <span className="text-sm md:text-xl text-ocean-800">{settings.siteName}</span>
          </div>
          <div className="flex gap-2">
-           {view === ViewState.HOME ? (
-             <button onClick={() => setShowLoginModal(true)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
-                <UserCircle size={16}/> Área Admin
-             </button>
-           ) : (
-             <button onClick={() => setView(ViewState.HOME)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
-                <Globe size={16}/> Ver Site
-             </button>
-           )}
+           <button onClick={() => view === ViewState.HOME ? setShowLoginModal(true) : setView(ViewState.HOME)} className="px-3 py-1 md:px-4 md:py-2 border rounded-full hover:bg-ocean-50 text-ocean-700 flex gap-1 md:gap-2 text-xs md:text-sm font-medium items-center">
+             {view === ViewState.HOME ? <><UserCircle size={16}/> Admin</> : <><Globe size={16}/> Site</>}
+           </button>
          </div>
       </header>
-
       <main className="flex-1">
-        {dbError && (
-          <div className="container mx-auto p-4 mt-4">
-             <div className="bg-red-100 text-red-800 p-4 rounded border border-red-200 flex justify-between items-center shadow-sm">
-                <span className="flex items-center gap-2"><AlertTriangle size={16}/> <strong>Erro de Conexão:</strong> {dbError}</span>
-                <button onClick={fetchProperties} className="bg-red-200 px-3 py-1 rounded hover:bg-red-300 text-sm font-bold flex items-center gap-1"><RefreshCw size={14}/> Tentar Novamente</button>
-             </div>
-          </div>
-        )}
-
+        {dbError && <div className="container mx-auto p-4 mt-4"><div className="bg-red-100 text-red-800 p-4 rounded border border-red-200 flex justify-between items-center"><span className="flex items-center gap-2"><AlertTriangle size={16}/> <strong>Erro:</strong> {dbError}</span><button onClick={fetchProperties} className="bg-red-200 px-3 py-1 rounded">Tentar</button></div></div>}
         {view === ViewState.HOME && (
           <>
-            {/* BOTÕES DE FILTRO E BUSCA */}
             <div className="bg-ocean-50 py-4 md:py-8 border-b border-ocean-100">
                <div className="container mx-auto px-2 md:px-4">
-                 
-                 {/* Botoes Grandes - Responsivo */}
                  <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
-                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[90px] ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
-                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[140px] ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
-                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[100px] ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
+                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[90px] ${filterType === 'all' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Todos</button>
+                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[140px] ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Temporada</button>
+                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg min-w-[100px] ${filterType === 'sale' ? 'bg-ocean-600 text-white' : 'bg-white text-ocean-600 border border-ocean-200'}`}>Comprar</button>
                  </div>
-
-                 {/* Busca Apurada (Filtros Finos) - SEMPRE VISIVEL */}
                  <div className="bg-white p-3 md:p-4 rounded-xl shadow-sm border border-ocean-100 max-w-4xl mx-auto flex flex-col md:flex-row gap-3 items-center">
-                    <div className="relative flex-1 w-full">
-                       <MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/>
-                       <input 
-                         className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
-                         placeholder="Bairro ou Condomínio..." 
-                         value={locationFilter}
-                         onChange={e => setLocationFilter(e.target.value)}
-                       />
-                    </div>
+                    <div className="relative flex-1 w-full"><MapPin size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/><input className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" placeholder="Bairro..." value={locationFilter} onChange={e => setLocationFilter(e.target.value)}/></div>
                     <div className="flex w-full md:w-auto gap-2">
-                       <div className="relative flex-1 md:w-32">
-                         <Bed size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/>
-                         <input 
-                           type="number"
-                           className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
-                           placeholder="Quartos+" 
-                           value={minBedrooms || ''}
-                           onChange={e => setMinBedrooms(Number(e.target.value))}
-                         />
-                       </div>
-                       <div className="relative flex-1 md:w-36">
-                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">R$</span>
-                         <input 
-                           type="number"
-                           className="w-full pl-8 pr-4 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-ocean-300" 
-                           placeholder="Máximo..." 
-                           value={priceRange.max || ''}
-                           onChange={e => setPriceRange({max: Number(e.target.value)})}
-                         />
-                       </div>
+                       <div className="relative flex-1 md:w-32"><Bed size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted"/><input type="number" className="w-full pl-10 pr-4 py-2 border rounded-lg text-sm" placeholder="Quartos+" value={minBedrooms || ''} onChange={e => setMinBedrooms(Number(e.target.value))}/></div>
+                       <div className="relative flex-1 md:w-36"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-sm">R$</span><input type="number" className="w-full pl-8 pr-4 py-2 border rounded-lg text-sm" placeholder="Máximo..." value={priceRange.max || ''} onChange={e => setPriceRange({max: Number(e.target.value)})}/></div>
                     </div>
-                    {(locationFilter || minBedrooms > 0 || priceRange.max > 0) && (
-                      <button onClick={() => { setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full" title="Limpar Filtros">
-                         <X size={18} />
-                      </button>
-                    )}
+                    {(locationFilter || minBedrooms > 0 || priceRange.max > 0) && <button onClick={() => { setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="p-2 text-red-500 hover:bg-red-50 rounded-full"><X size={18}/></button>}
                  </div>
-
                </div>
             </div>
-
             <div className="container mx-auto px-4 py-8">
-              {isLoading ? (
-                <LoadingSpinner />
-              ) : (
+              {isLoading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                  {visibleProperties.map(p => (
-                    <div key={p.id} className="relative group">
-                      {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
-                      <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
-                    </div>
-                  ))}
-                  {visibleProperties.length === 0 && !dbError && (
-                    <div className="col-span-full text-center py-12 text-muted">
-                        <Filter size={48} className="mx-auto mb-4 text-ocean-200" />
-                        <p className="text-xl">Nenhum imóvel encontrado com estes filtros.</p>
-                        <button onClick={() => { setFilterType('all'); setLocationFilter(''); setMinBedrooms(0); setPriceRange({max: 0}); }} className="mt-4 text-ocean-600 font-bold hover:underline">Limpar Filtros</button>
-                    </div>
-                  )}
+                  {visibleProperties.map(p => (<div key={p.id} className="relative group">{p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}<PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} /></div>))}
+                  {visibleProperties.length === 0 && !dbError && <div className="col-span-full text-center py-12 text-muted"><Filter size={48} className="mx-auto mb-4 text-ocean-200" /><p>Nenhum imóvel encontrado.</p></div>}
                 </div>
               )}
             </div>
           </>
         )}
-        
         {view === ViewState.DETAILS && selectedProperty && <PropertyDetails property={selectedProperty} onBack={() => setView(ViewState.HOME)} bookingPhone={settings.contact.bookingPhone || settings.contact.phone} />}
-        
         {view === ViewState.ADMIN_PROPERTIES && (
            <div className="container mx-auto p-4 flex flex-col md:flex-row gap-6">
               <div className="w-full md:w-64 flex flex-row md:flex-col gap-2 overflow-x-auto pb-2 md:pb-0 sticky top-20 h-fit z-10 bg-page">
                   <button className="flex-1 bg-ocean-600 text-white p-3 rounded text-left font-bold flex gap-2"><LayoutDashboard size={18}/> Imóveis</button>
                   <button onClick={() => setView(ViewState.ADMIN_SETTINGS)} className="flex-1 bg-white text-muted p-3 rounded text-left hover:bg-gray-50 flex gap-2"><Settings size={18}/> Configurações</button>
               </div>
-              
               <div className="flex-1">
-                <div className="flex justify-between items-center mb-6">
-                   <h1 className="text-2xl font-bold text-ocean-800">Meus Imóveis</h1>
-                   <button onClick={() => { setSelectedProperty(null); setView(ViewState.ADMIN_FORM); }} className="bg-ocean-600 text-white px-4 py-2 rounded-full hover:bg-ocean-700 flex items-center gap-2 font-bold shadow-lg"><Plus size={20}/> Novo Imóvel</button>
-                </div>
-                {isLoading ? (
-                  <LoadingSpinner />
-                ) : (
+                <div className="flex justify-between items-center mb-6"><h1 className="text-2xl font-bold text-ocean-800">Meus Imóveis</h1><button onClick={() => { setSelectedProperty(null); setView(ViewState.ADMIN_FORM); }} className="bg-ocean-600 text-white px-4 py-2 rounded-full hover:bg-ocean-700 flex items-center gap-2 font-bold shadow-lg"><Plus size={20}/> Novo Imóvel</button></div>
+                {isLoading ? <LoadingSpinner /> : (
                   <div className="grid grid-cols-1 gap-4">
                     {properties.map(p => (
                       <div key={p.id} className={`bg-white p-4 rounded-lg shadow flex justify-between items-center ${p.active === false ? 'opacity-60 bg-gray-50' : ''} ${p.featured ? 'border-l-4 border-yellow-400' : ''}`}>
-                          <div className="flex items-center gap-4">
-                            <img src={p.images[0] || 'https://via.placeholder.com/50'} className="w-16 h-16 object-cover rounded" />
-                            <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="font-bold">{p.title}</h3>
-                                  {p.active === false && <span className="text-xs bg-gray-200 text-gray-600 px-2 rounded">Inativo</span>}
-                                  {p.featured && <Star size={14} className="text-yellow-500 fill-yellow-500"/>}
-                                </div>
-                                <p className="text-sm text-muted">{p.location}</p>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => { setSelectedProperty(p); setView(ViewState.ADMIN_FORM); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit size={18}/></button>
-                            <button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={18}/></button>
-                          </div>
+                          <div className="flex items-center gap-4"><img src={p.images[0] || 'https://via.placeholder.com/50'} className="w-16 h-16 object-cover rounded" /><div><div className="flex items-center gap-2"><h3 className="font-bold">{p.title}</h3>{p.active === false && <span className="text-xs bg-gray-200 text-gray-600 px-2 rounded">Inativo</span>}{p.featured && <Star size={14} className="text-yellow-500 fill-yellow-500"/>}</div><p className="text-sm text-muted">{p.location}</p></div></div>
+                          <div className="flex gap-2"><button onClick={() => { setSelectedProperty(p); setView(ViewState.ADMIN_FORM); }} className="p-2 text-blue-600 hover:bg-blue-50 rounded"><Edit size={18}/></button><button onClick={() => handleDelete(p.id)} className="p-2 text-red-600 hover:bg-red-50 rounded"><Trash2 size={18}/></button></div>
                       </div>
                     ))}
-                    {properties.length === 0 && <div className="text-center text-muted py-8">Nenhum imóvel cadastrado.</div>}
+                    {properties.length === 0 && <div className="text-center text-muted py-8">Nenhum imóvel.</div>}
                   </div>
                 )}
               </div>
            </div>
         )}
-
-        {view === ViewState.ADMIN_FORM && (
-          <AdminForm 
-            property={selectedProperty} 
-            onSave={handleSaveProperty} 
-            onCancel={() => setView(ViewState.ADMIN_PROPERTIES)} 
-          />
-        )}
-
-        {view === ViewState.ADMIN_SETTINGS && (
-          <div className="container mx-auto p-4">
-             <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="mb-4 flex items-center text-muted hover:text-ocean-600"><ArrowLeft size={18} className="mr-2"/> Voltar para Imóveis</button>
-             <AdminSettings settings={settings} onSave={handleSaveSettings} />
-          </div>
-        )}
-
+        {view === ViewState.ADMIN_FORM && <AdminForm property={selectedProperty} onSave={handleSaveProperty} onCancel={() => setView(ViewState.ADMIN_PROPERTIES)} />}
+        {view === ViewState.ADMIN_SETTINGS && <div className="container mx-auto p-4"><button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="mb-4 flex items-center text-muted hover:text-ocean-600"><ArrowLeft size={18} className="mr-2"/> Voltar</button><AdminSettings settings={settings} onSave={handleSaveSettings} /></div>}
       </main>
-
-      {/* FOOTER */}
       {(view === ViewState.HOME || view === ViewState.DETAILS) && <Footer settings={settings} />}
     </div>
   );

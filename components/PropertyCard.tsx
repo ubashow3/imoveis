@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Property } from '../types';
-import { MapPin, Bed, Bath, Expand, Heart, Image as ImageIcon } from 'lucide-react';
+import { MapPin, Bed, Bath, Expand, Heart, Image as ImageIcon, Users } from 'lucide-react';
 
 interface PropertyCardProps {
   property: Property;
@@ -13,7 +13,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   // Use the first image or a placeholder
-  const mainImage = property.images.length > 0 
+  const mainImage = property.images && property.images.length > 0 
     ? property.images[0] 
     : 'https://via.placeholder.com/800x600?text=Sem+Foto';
 
@@ -28,12 +28,12 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
           alt={property.title} 
           className="w-full h-full object-cover transform group-hover:scale-110 transition-transform duration-500"
         />
-        <div className="absolute top-4 left-4 bg-ocean-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm">
+        <div className={`absolute top-4 left-4 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide shadow-sm ${property.type === 'rent_seasonal' ? 'bg-green-600' : 'bg-ocean-600'}`}>
           {property.type === 'sale' ? 'Venda' : 'Temporada'}
         </div>
         
         <div className="absolute bottom-4 right-4 bg-black/60 text-white px-2 py-1 rounded-md text-xs flex items-center gap-1 backdrop-blur-sm">
-           <ImageIcon size={12} /> {property.images.length}
+           <ImageIcon size={12} /> {property.images ? property.images.length : 0}
         </div>
 
         <button className="absolute top-4 right-4 bg-white/80 p-2 rounded-full hover:bg-white text-ocean-600 transition-colors">
@@ -55,18 +55,26 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onClick })
         </div>
 
         <div className="flex justify-between border-t border-ocean-100 pt-4 text-muted">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" title="Quartos">
             <Bed size={18} />
             <span className="text-sm">{property.bedrooms}</span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1" title="Banheiros">
             <Bath size={18} />
             <span className="text-sm">{property.bathrooms}</span>
           </div>
-          <div className="flex items-center gap-1">
-            <Expand size={18} />
-            <span className="text-sm">{property.area} m²</span>
-          </div>
+          {/* Se for temporada, mostra Capacidade em vez de Área se houver info */}
+          {property.type === 'rent_seasonal' && property.max_guests ? (
+            <div className="flex items-center gap-1 text-green-600 font-medium" title="Acomoda até">
+              <Users size={18} />
+              <span className="text-sm">{property.max_guests}</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1" title="Área">
+              <Expand size={18} />
+              <span className="text-sm">{property.area} m²</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

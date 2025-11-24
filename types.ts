@@ -12,13 +12,14 @@ export interface Property {
   bedrooms: number;
   bathrooms: number;
   area: number;
+  max_guests?: number; // Novo campo: Capacidade de Pessoas
   images: string[];
   features: string[];
   views: number;
-  // Novos campos administrativos
-  active: boolean;      // Se false, não aparece no site público
-  featured: boolean;    // Se true, aparece com destaque/topo
-  owner_notes?: string; // Observações internas (não aparece no site)
+  // Campos administrativos
+  active: boolean;      
+  featured: boolean;    
+  owner_notes?: string; 
 }
 
 export type ThemeOption = 'ocean' | 'nature' | 'sunset' | 'dark';
