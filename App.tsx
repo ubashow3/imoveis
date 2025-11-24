@@ -9,7 +9,7 @@ import {
   Image as ImageIcon, Edit, UserCircle, Globe, Database,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText
+  Eye, EyeOff, Star, FileText, Search
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -17,10 +17,7 @@ interface ErrorBoundaryProps { children?: React.ReactNode; }
 interface ErrorBoundaryState { hasError: boolean; error: Error | null; }
 
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
+  state: ErrorBoundaryState = { hasError: false, error: null };
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
@@ -402,6 +399,11 @@ const AppContent: React.FC = () => {
   const [dbError, setDbError] = useState<string | null>(null);
   const [logoFailed, setLogoFailed] = useState(false);
   const [showDbSetup, setShowDbSetup] = useState(false);
+  
+  // -- ESTADOS DE BUSCA --
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'sale' | 'rent_seasonal'>('all');
+
   const loadingTimeoutRef = useRef<any>(null);
 
   // --- FORÇAR REMOÇÃO DO LOADER ---
@@ -411,7 +413,7 @@ const AppContent: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    console.log("App V.3.4 - Audit & Update");
+    console.log("App V.3.5 - Search Restored");
     fetchSettings();
     fetchProperties();
     return () => { if (loadingTimeoutRef.current) clearTimeout(loadingTimeoutRef.current); };
@@ -449,7 +451,6 @@ const AppContent: React.FC = () => {
     }, 8000);
 
     try {
-      // Ordena: Primeiro Destaques, depois data de criação
       const { data, error } = await supabase.from('properties')
         .select('*')
         .order('featured', { ascending: false, nullsLast: true })
@@ -465,7 +466,6 @@ const AppContent: React.FC = () => {
           ...p, 
           images: p.images || [], 
           features: p.features || [],
-          // Garante valores padrão se a coluna for nova
           active: p.active !== false,
           featured: p.featured === true
         })));
@@ -537,8 +537,19 @@ const AppContent: React.FC = () => {
     setIsLoading(false);
   };
 
-  // Filtragem para o usuário comum (só mostra ativos)
-  const visibleProperties = properties.filter(p => view === ViewState.ADMIN_PROPERTIES ? true : p.active !== false);
+  // -- FILTRAGEM --
+  const visibleProperties = properties.filter(p => {
+    if (view === ViewState.ADMIN_PROPERTIES) return true; // Admin vê tudo
+    if (p.active === false) return false; // Público não vê inativos
+
+    const matchesSearch = searchTerm === '' || (
+       p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+       p.location.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    const matchesType = filterType === 'all' || p.type === filterType;
+
+    return matchesSearch && matchesType;
+  });
 
   if (showDbSetup) return <DatabaseSetup />;
 
@@ -575,20 +586,43 @@ const AppContent: React.FC = () => {
         )}
 
         {view === ViewState.HOME && (
-          <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {visibleProperties.map(p => (
-              <div key={p.id} className="relative group">
-                 {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
-                 <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
-              </div>
-            ))}
-            {visibleProperties.length === 0 && !isLoading && !dbError && (
-               <div className="col-span-full text-center py-12 text-muted">
-                  <p>Nenhum imóvel disponível no momento.</p>
-                  <button onClick={() => setView(ViewState.ADMIN_PROPERTIES)} className="mt-4 text-ocean-600 font-bold">Acessar Painel Admin</button>
+          <>
+            {/* BUSCA E FILTROS */}
+            <div className="bg-ocean-50 py-8 border-b border-ocean-100">
+               <div className="container mx-auto px-4">
+                  <div className="bg-white p-2 rounded-full shadow-lg border border-ocean-100 flex items-center max-w-2xl mx-auto mb-6">
+                     <Search className="text-muted ml-3" />
+                     <input 
+                        className="flex-1 p-3 outline-none text-main placeholder-muted"
+                        placeholder="Busque por praia, bairro ou nome..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                     />
+                     <button className="bg-ocean-600 text-white px-6 py-2 rounded-full font-bold hover:bg-ocean-700 hidden sm:block">Buscar</button>
+                  </div>
+                  <div className="flex justify-center gap-4">
+                     <button onClick={() => setFilterType('all')} className={`px-4 py-2 rounded-full font-bold transition-all ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
+                     <button onClick={() => setFilterType('rent_seasonal')} className={`px-4 py-2 rounded-full font-bold transition-all ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
+                     <button onClick={() => setFilterType('sale')} className={`px-4 py-2 rounded-full font-bold transition-all ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
+                  </div>
                </div>
-            )}
-          </div>
+            </div>
+
+            <div className="container mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+              {visibleProperties.map(p => (
+                <div key={p.id} className="relative group">
+                   {p.featured && <div className="absolute -top-3 left-4 z-10 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow flex items-center gap-1"><Star size={12}/> DESTAQUE</div>}
+                   <PropertyCard property={p} onClick={() => { setSelectedProperty(p); setView(ViewState.DETAILS); }} />
+                </div>
+              ))}
+              {visibleProperties.length === 0 && !isLoading && !dbError && (
+                 <div className="col-span-full text-center py-12 text-muted">
+                    <p className="text-xl">Nenhum imóvel encontrado.</p>
+                    <p className="text-sm">Tente mudar os filtros ou o termo de busca.</p>
+                 </div>
+              )}
+            </div>
+          </>
         )}
         
         {view === ViewState.DETAILS && selectedProperty && <PropertyDetails property={selectedProperty} onBack={() => setView(ViewState.HOME)} bookingPhone={settings.contact.bookingPhone || settings.contact.phone} />}
