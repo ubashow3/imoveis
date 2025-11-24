@@ -55,34 +55,57 @@ const fileToBase64 = (file: File): Promise<string> => new Promise((resolve, reje
   reader.onerror = error => reject(error);
 });
 
-// Upload real para Supabase Storage
+// Upload real para Supabase Storage (CORRIGIDO)
 const uploadImage = async (file: File): Promise<string | null> => {
   try {
+    // 1. Limpar nome do arquivo (remove acentos e espaços)
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
-    const filePath = `${fileName}`;
+    const cleanName = file.name.replace(/[^a-zA-Z0-9]/g, '');
+    const fileName = `${Date.now()}_${cleanName}.${fileExt}`;
+    
+    console.log("Iniciando upload para:", fileName);
 
-    const { error: uploadError } = await supabase.storage
-      .from('images')
-      .upload(filePath, file);
+    // 2. Tentar Upload
+    const { data, error: uploadError } = await supabase.storage
+      .from('images') // O Bucket deve se chamar 'images'
+      .upload(fileName, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
 
-    if (uploadError) throw uploadError;
+    if (uploadError) {
+      console.error("Erro detalhado do upload:", uploadError);
+      throw uploadError;
+    }
 
-    const { data } = supabase.storage.from('images').getPublicUrl(filePath);
-    return data.publicUrl;
+    // 3. Pegar URL Pública
+    const { data: urlData } = supabase.storage.from('images').getPublicUrl(fileName);
+    
+    if (!urlData || !urlData.publicUrl) {
+      throw new Error("Não foi possível gerar a URL pública.");
+    }
+
+    console.log("Upload Sucesso:", urlData.publicUrl);
+    return urlData.publicUrl;
+
   } catch (error: any) {
-    console.error("Erro upload:", error);
-    if (error instanceof SyntaxError || error.message?.includes('Unexpected token') || error.message?.includes('JSON')) {
-       alert('Erro Crítico no Storage: O Bucket "images" parece não existir ou está sem permissão. Vá em Configurações > Gerar Teste e copie o novo SQL para corrigir.');
+    console.error("FALHA NO UPLOAD:", error);
+    
+    let msg = error.message || "Erro desconhecido";
+    
+    if (msg.includes('row-level security') || msg.includes('new row violates')) {
+      alert('ERRO DE PERMISSÃO: O Supabase bloqueou o envio.\n\nSOLUÇÃO: Vá em Configurações > Ver SQL e rode o código no Supabase para liberar o Bucket.');
+    } else if (msg.includes('Bucket not found')) {
+      alert('ERRO: O Bucket "images" não existe.\n\nSOLUÇÃO: Rode o SQL de atualização no Supabase.');
     } else {
-       alert('Erro no upload: ' + (error.message || "Falha de conexão"));
+      alert('Erro no upload: ' + msg);
     }
     return null;
   }
 };
 
-// --- SQL SETUP ---
-const SQL_SETUP_CODE = `-- 1. TABELAS
+// --- SQL SETUP (REFORÇADO) ---
+const SQL_SETUP_CODE = `-- 1. TABELAS (Estrutura)
 create table if not exists properties (
   id uuid default gen_random_uuid() primary key,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
@@ -102,7 +125,7 @@ create table if not exists properties (
   owner_notes text
 );
 
--- Migração
+-- Migração de Colunas (Caso tabela já exista)
 do $$
 begin
   if not exists (select 1 from information_schema.columns where table_name='properties' and column_name='active') then
@@ -123,7 +146,7 @@ create table if not exists site_settings (
 );
 insert into site_settings (id, data) values (1, '{}'::jsonb) on conflict (id) do nothing;
 
--- 2. PERMISSÕES
+-- 2. PERMISSÕES DE TABELAS
 alter table properties enable row level security;
 alter table site_settings enable row level security;
 
@@ -133,19 +156,27 @@ drop policy if exists "Public Settings" on site_settings;
 create policy "Public Access" on properties for all using (true) with check (true);
 create policy "Public Settings" on site_settings for all using (true) with check (true);
 
--- 3. STORAGE
-insert into storage.buckets (id, name, public) values ('images', 'images', true) on conflict (id) do nothing;
+-- 3. STORAGE (IMAGENS) - CRÍTICO PARA UPLOAD
+-- Cria o bucket se não existir
+insert into storage.buckets (id, name, public) 
+values ('images', 'images', true) 
+on conflict (id) do update set public = true;
 
+-- Libera permissão geral no esquema storage (Corrige erro "Internal Server Error")
 grant all on schema storage to postgres, anon, authenticated, service_role;
 grant all on table storage.objects to postgres, anon, authenticated, service_role;
 
+-- Remove políticas antigas (Limpeza)
 drop policy if exists "Public Views" on storage.objects;
 drop policy if exists "Public Uploads" on storage.objects;
 drop policy if exists "Public Deletes" on storage.objects;
+drop policy if exists "Anon Insert" on storage.objects;
+drop policy if exists "Anon Select" on storage.objects;
 
-create policy "Public Views" on storage.objects for select using ( bucket_id = 'images' );
-create policy "Public Uploads" on storage.objects for insert with check ( bucket_id = 'images' );
-create policy "Public Deletes" on storage.objects for delete using ( bucket_id = 'images' );
+-- CRIA AS NOVAS REGRAS (LIBERA GERAL)
+create policy "Anon Insert" on storage.objects for insert with check ( bucket_id = 'images' );
+create policy "Anon Select" on storage.objects for select using ( bucket_id = 'images' );
+create policy "Anon Delete" on storage.objects for delete using ( bucket_id = 'images' );
 `;
 
 const UbatubaLogo: React.FC<{ className?: string }> = ({ className }) => (
@@ -296,7 +327,7 @@ const DatabaseSetup: React.FC = () => {
       <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
       <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização de Banco de Dados</h1>
       <p className="text-muted max-w-2xl mb-8">
-        Para que as fotos e novos campos funcionem, execute este SQL no Supabase.
+        Para corrigir o UPLOAD DE IMAGENS, copie o SQL abaixo e rode no Supabase.
       </p>
       <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
         <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
@@ -497,6 +528,8 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
          setFormData(prev => ({ ...prev, images: [...(prev.images || []), url] }));
        }
        setUploading(false);
+       // Limpa o input para permitir selecionar o mesmo arquivo novamente se necessário
+       e.target.value = '';
     }
   };
 
@@ -546,9 +579,9 @@ const AdminForm: React.FC<{ property?: Property | null; onSave: (p: Partial<Prop
           <div className="flex gap-2 mb-2">
             <input type="text" placeholder="Cole uma URL..." className="flex-1 p-2 border rounded" value={imgUrl} onChange={e => setImgUrl(e.target.value)} />
             <button onClick={addImage} className="bg-ocean-100 text-ocean-600 px-4 rounded"><Plus /></button>
-            <label className="bg-ocean-600 text-white px-4 py-2 rounded cursor-pointer flex items-center gap-2 hover:bg-ocean-700 transition-colors">
-              {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Camera size={20}/>}
-              <span>{uploading ? 'Enviando...' : 'Upload'}</span>
+            <label className={`bg-ocean-600 text-white px-4 py-2 rounded cursor-pointer flex items-center gap-2 hover:bg-ocean-700 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? <RefreshCw className="animate-spin" size={20}/> : <Upload size={20}/>}
+              <span>{uploading ? 'Enviando...' : 'Upload Foto'}</span>
               <input type="file" hidden onChange={handleFile} accept="image/*" disabled={uploading}/>
             </label>
           </div>
@@ -829,11 +862,11 @@ const AppContent: React.FC = () => {
             <div className="bg-ocean-50 py-4 md:py-8 border-b border-ocean-100">
                <div className="container mx-auto px-2 md:px-4">
                  
-                 {/* Botoes Grandes */}
+                 {/* Botoes Grandes - Responsivo */}
                  <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
-                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
-                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
-                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
+                    <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[90px] ${filterType === 'all' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Todos</button>
+                    <button onClick={() => setFilterType('rent_seasonal')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[140px] ${filterType === 'rent_seasonal' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Alugar Temporada</button>
+                    <button onClick={() => setFilterType('sale')} className={`flex-1 md:flex-none px-3 py-2 md:px-6 md:py-3 rounded-full font-bold text-xs md:text-lg transition-all whitespace-nowrap min-w-[100px] ${filterType === 'sale' ? 'bg-ocean-600 text-white shadow-lg' : 'bg-white text-ocean-600 border border-ocean-200 hover:bg-ocean-50'}`}>Comprar</button>
                  </div>
 
                  {/* Busca Apurada (Filtros Finos) - SEMPRE VISIVEL */}
