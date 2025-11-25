@@ -1,15 +1,14 @@
-
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { Property, ViewState, SiteSettings } from './types';
 import { generatePropertyDescription } from './services/geminiService';
-import { supabase } from './services/supabaseClient';
+import { supabase, updateSupabaseCredentials, resetSupabaseCredentials } from './services/supabaseClient';
 import { PropertyCard } from './components/PropertyCard';
 import { 
   LayoutDashboard, Plus, Settings, Phone, Palette, Save, Trash2, 
   Image as ImageIcon, Edit, UserCircle, Globe,
   ArrowLeft, X, Camera, Sparkles, MapPin, Bed, Bath, Expand, CheckCircle,
   AlertTriangle, RefreshCw, ChevronLeft, ChevronRight, Upload,
-  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users, Key, ShieldCheck
+  Eye, EyeOff, Star, FileText, Facebook, Instagram, Mail, Clock, Filter, Calendar, DollarSign, Lock, LogIn, Users, Key, ShieldCheck, HardDrive, Database
 } from 'lucide-react';
 
 // --- ERROR BOUNDARY ---
@@ -312,24 +311,79 @@ const AdminLoginModal: React.FC<{ isOpen: boolean; onClose: () => void; onLogin:
 
 const DatabaseSetup: React.FC = () => {
   const [copied, setCopied] = useState(false);
+  const [url, setUrl] = useState(localStorage.getItem('sb_url') || '');
+  const [key, setKey] = useState(localStorage.getItem('sb_key') || '');
+  const [checking, setChecking] = useState(false);
+
   const handleCopy = () => {
     navigator.clipboard.writeText(SQL_SETUP_CODE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const handleConnect = () => {
+    if(!url || !key) return alert("Preencha URL e Chave!");
+    updateSupabaseCredentials(url, key);
+  };
+
+  const handleVerify = async () => {
+    setChecking(true);
+    try {
+      const { error } = await supabase.from('properties').select('id').limit(1);
+      if (error && error.code === '42P01') {
+        alert("❌ As tabelas ainda não foram encontradas.\n\nPor favor, copie o SQL acima e rode no Supabase.");
+      } else {
+        alert("✅ Conectado com sucesso!\nO sistema será recarregado.");
+        window.location.reload();
+      }
+    } catch (e) {
+      alert("Erro ao verificar: " + e);
+    }
+    setChecking(false);
+  };
+
   return (
-    <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[60vh] text-center">
-      <div className="bg-red-50 text-red-600 p-4 rounded-full mb-6"><AlertTriangle size={48} /></div>
-      <h1 className="text-2xl md:text-3xl font-bold text-main mb-4">Atualização de Banco de Dados</h1>
-      <p className="text-muted max-w-2xl mb-8">Para corrigir as tabelas e o UPLOAD, copie o SQL e rode no Supabase.</p>
-      <div className="w-full max-w-3xl bg-gray-900 rounded-xl overflow-hidden shadow-2xl text-left mb-6">
-        <div className="bg-gray-800 px-4 py-2 flex justify-between items-center border-b border-gray-700">
-          <span className="text-gray-400 text-sm font-mono">SQL</span>
-          <button onClick={handleCopy} className="text-white hover:text-ocean-300 text-sm font-medium">{copied ? 'Copiado!' : 'Copiar SQL'}</button>
+    <div className="container mx-auto px-4 py-12 flex flex-col items-center justify-center min-h-[80vh] text-center max-w-4xl">
+      <div className="bg-ocean-50 text-ocean-600 p-6 rounded-full mb-6 shadow-xl animate-bounce"><HardDrive size={64} /></div>
+      <h1 className="text-3xl md:text-4xl font-bold text-main mb-2">Instalador do Sistema</h1>
+      <p className="text-muted max-w-2xl mb-8 text-lg">
+        Configure o banco de dados para iniciar o aplicativo.
+      </p>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8 w-full text-left">
+        {/* PASSO 1: CONEXÃO */}
+        <div className="bg-white border border-ocean-100 rounded-xl shadow-lg p-6">
+           <h3 className="font-bold text-ocean-800 mb-4 border-b pb-2 flex items-center gap-2"><div className="bg-ocean-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">1</div> Conexão com Supabase</h3>
+           <p className="text-sm text-gray-500 mb-4">Insira as credenciais do NOVO projeto criado no Supabase.</p>
+           <div className="space-y-3">
+             <div>
+               <label className="block text-xs font-bold text-gray-500 mb-1">Project URL</label>
+               <input className="w-full p-2 border rounded text-sm bg-gray-50" value={url} onChange={e=>setUrl(e.target.value)} placeholder="https://xxx.supabase.co" />
+             </div>
+             <div>
+               <label className="block text-xs font-bold text-gray-500 mb-1">Anon Key (Public)</label>
+               <input className="w-full p-2 border rounded text-sm bg-gray-50" value={key} onChange={e=>setKey(e.target.value)} placeholder="eyJh..." />
+             </div>
+             <button onClick={handleConnect} className="w-full bg-ocean-600 text-white py-2 rounded font-bold hover:bg-ocean-700 mt-2">Salvar Credenciais</button>
+           </div>
         </div>
-        <pre className="p-6 overflow-x-auto text-sm text-green-400 font-mono"><code>{SQL_SETUP_CODE}</code></pre>
+
+        {/* PASSO 2: ESTRUTURA */}
+        <div className="bg-white border border-ocean-100 rounded-xl shadow-lg p-6 flex flex-col">
+           <h3 className="font-bold text-ocean-800 mb-4 border-b pb-2 flex items-center gap-2"><div className="bg-ocean-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs">2</div> Criar Tabelas (SQL)</h3>
+           <p className="text-sm text-gray-500 mb-4">Copie o código abaixo e rode no <strong>SQL Editor</strong> do Supabase.</p>
+           
+           <div className="flex-1 bg-gray-900 rounded overflow-hidden relative mb-4">
+              <button onClick={handleCopy} className="absolute top-2 right-2 bg-ocean-600 hover:bg-ocean-500 text-white px-2 py-1 rounded text-xs font-bold">{copied ? 'Copiado!' : 'Copiar'}</button>
+              <pre className="p-4 text-xs text-green-400 font-mono h-32 overflow-auto">{SQL_SETUP_CODE}</pre>
+           </div>
+           
+           <button onClick={handleVerify} disabled={checking} className="w-full bg-green-600 text-white py-3 rounded font-bold hover:bg-green-700 flex items-center justify-center gap-2 shadow-md">
+             {checking ? <RefreshCw className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
+             Verificar Instalação e Concluir
+           </button>
+        </div>
       </div>
-      <button onClick={() => window.location.reload()} className="bg-ocean-600 text-white px-8 py-3 rounded-full font-bold hover:bg-ocean-700 flex items-center gap-2"><RefreshCw size={20} /> Já Atualizei, Recarregar</button>
     </div>
   );
 };
@@ -637,7 +691,10 @@ const AdminSettings: React.FC<{ settings: SiteSettings; onSave: (s: SiteSettings
            <label className="block text-sm mb-1">Horários</label><input className="w-full p-2 border rounded mb-3" value={local.contact.hours} onChange={e => setLocal({ ...local, contact: { ...local.contact, hours: e.target.value } })} />
         </div>
       </div>
-      <div className="mt-6 flex justify-end">
+      <div className="mt-6 flex justify-end gap-2">
+         {localStorage.getItem('sb_url') && (
+           <button onClick={() => { if(confirm("Deseja desconectar o projeto atual?")) resetSupabaseCredentials(); }} className="bg-red-50 text-red-600 py-3 px-6 rounded-xl font-bold hover:bg-red-100 flex gap-2"><Database size={20}/> Trocar Projeto DB</button>
+         )}
          <button onClick={() => onSave(local)} className="bg-ocean-600 text-white py-3 px-8 rounded-xl font-bold hover:bg-ocean-700 flex gap-2"><Save/> Salvar</button>
       </div>
     </div>
